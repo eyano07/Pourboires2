@@ -5,7 +5,10 @@ export interface TipsData {
   total: number
   entries: Entry[]
   shareWith: string[]
-  lastClose: { total: number, shares: Share[], by: string } | null
+  closes: { shift: string, total: number, shares: Share[], by: string }[]
+  /** Service en cours, ou null si la journée est clôturée. */
+  shift: string | null
+  shifts: string[]
 }
 export interface LiveNotice { title: string, body: string }
 

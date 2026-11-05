@@ -1,10 +1,13 @@
 <template>
   <v-card>
-    <v-card-title>Qui partage le pourboire ?</v-card-title>
+    <v-card-title>Qui partage le service : {{ tips?.shift ?? '—' }} ?</v-card-title>
     <v-card-subtitle class="text-wrap">
-      Les personnes cochées se partagent la caisse à parts égales au moment du vidage,
-      et elles sont les seules à être notifiées à chaque nouveau pourboire.
+      Cochez les personnes qui travaillent pendant ce service. Elles se partagent la caisse à parts égales
+      au moment du vidage, et ce sont les seules à être alertées à chaque nouveau pourboire.
     </v-card-subtitle>
+    <v-alert v-if="tips && !tips.shift" type="success" variant="tonal" class="mx-4">
+      Journée clôturée : la sélection reprendra demain.
+    </v-alert>
     <v-card-text>
       <div class="d-flex ga-2 mb-2">
         <v-btn size="small" variant="tonal" @click="selected = staff?.map(s => s.username) ?? []">Tout cocher</v-btn>
@@ -35,7 +38,7 @@
     <v-card-actions>
       <v-btn to="/">Retour</v-btn>
       <v-spacer />
-      <v-btn color="primary" variant="flat" :loading="saving" data-testid="save-share" @click="save">Enregistrer</v-btn>
+      <v-btn color="primary" variant="flat" :loading="saving" :disabled="!tips?.shift" data-testid="save-share" @click="save">Enregistrer</v-btn>
     </v-card-actions>
   </v-card>
 </template>

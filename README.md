@@ -24,13 +24,14 @@ Option : `--temp` sur `npm run user:add` crée aussi un compte dont le mot de pa
 ## Partage, vidage et notifications
 - **Page « Partage »** (caissier) : liste tous les comptes du personnel (sauf administrateurs), avec l'indicateur « en ligne ». Le caissier coche les personnes qui partageront le pourboire.
 - **Notifications** : seules les personnes cochées sont alertées à chaque nouveau pourboire (pas l'auteur de la saisie).
-- **Vider la caisse** (caissier) : aperçu des parts, puis partage à parts égales au centime près (les centimes restants vont aux premiers par ordre alphabétique), compteur remis à zéro, chaque personne notifiée de sa part. Le dernier partage reste affiché jusqu'au soir ; la sélection reste valable jusqu'au changement de jour.
+- **Services du matin et du soir** : le caissier du matin coche ses personnes puis vide la caisse ; le compteur et la sélection reviennent à zéro. Le caissier du soir coche ses personnes et vide à son tour : la journée est alors **clôturée** (plus de saisie jusqu'au lendemain). Les partages du jour restent affichés jusqu'à minuit. Variable facultative `SHIFTS` (défaut `Matin,Soir`) pour changer le nombre ou le nom des services.
+- **Vider la caisse** (caissier) : aperçu des parts, puis partage à parts égales au centime près (les centimes restants vont aux premiers par ordre alphabétique), chaque personne notifiée de sa part.
 - **En direct sans interrogation** : chaque écran ouvert garde une seule connexion (Server-Sent Events) sur laquelle le serveur pousse les changements. Aucune requête répétée.
 - **Notifications sur téléphone (appli fermée)** : Web Push, à activer avec le bouton « Activer ». Les navigateurs ne l'autorisent **qu'en HTTPS**. Sur iPhone (iOS 16.4+), il faut aussi ajouter le site à l'écran d'accueil. Clés générées dans `data/vapid.json`, abonnements dans `data/push.json`. Variable facultative `PUSH_CONTACT=mailto:vous@exemple.com`. Le VPS doit pouvoir joindre les services de push (Google, Mozilla, Apple) en HTTPS.
 
 ## Fichiers de données (`data/`)
 - `users.json` : comptes `{ username, role, passwordHash, mustChangePassword }` (mot de passe haché).
-- `tips.json` : pourboires en cours `{ date, entries: [{ id, username, amount }], shareWith, lastClose }` : utilisateur et montant de chaque saisie, personnes cochées, dernier partage du jour.
+- `tips.json` : pourboires en cours `{ date, entries: [{ id, username, amount }], shareWith, closes }` : utilisateur et montant de chaque saisie, personnes cochées pour le service en cours, partages du jour (un par service).
 - `vapid.json`, `push.json` : clés et abonnements des notifications (créés automatiquement). Remis à zéro automatiquement au changement de jour (fuseau Africa/Kinshasa).
 
 Ces deux fichiers sont ignorés par Git. `DATA_DIR` permet de changer le dossier.

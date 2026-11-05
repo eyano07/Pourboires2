@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
   const amount = validateAmount(body?.amount)
   if (amount === null) throw createError({ statusCode: 400, statusMessage: 'Montant invalide' })
   const entry = await addTip(me.username, amount)
+  if (entry === 'day_closed') throw createError({ statusCode: 409, statusMessage: 'Journée clôturée : reprise demain' })
   const data = await readTips()
   await publishTips(data)
   // Seules les personnes cochées par la caisse sont notifiées (pas l'auteur de la saisie).

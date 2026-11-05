@@ -1,12 +1,15 @@
 import { readUsers } from './auth'
 import { broadcast } from './events'
 import { notify } from './push'
-import { dataDir, readTips, totalOf, type TipsFile } from './store'
+import { currentShift, dataDir, readTips, shifts, totalOf, type TipsFile } from './store'
 
 export const money = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(n)
 
 export function snapshot(data: TipsFile) {
-  return { date: data.date, total: totalOf(data.entries), entries: data.entries, shareWith: data.shareWith, lastClose: data.lastClose }
+  return {
+    date: data.date, total: totalOf(data.entries), entries: data.entries, shareWith: data.shareWith,
+    closes: data.closes, shift: currentShift(data), shifts: shifts(),
+  }
 }
 
 /** Comptes pouvant partager les pourboires : tous sauf les administrateurs. */

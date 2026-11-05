@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
     chosen.push(real)
   }
   const shareWith = await setShareWith(chosen)
+  if (shareWith === 'day_closed') throw createError({ statusCode: 409, statusMessage: 'Journée clôturée : reprise demain' })
   await publishTips()
   return { shareWith }
 })

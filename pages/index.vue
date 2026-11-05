@@ -3,6 +3,9 @@
     <v-card class="mb-4 text-center" color="primary" variant="tonal">
       <v-card-text>
         <div class="text-title-medium">Caisse des pourboires du {{ tips?.date }}</div>
+        <v-chip class="mt-1" size="small" :color="tips?.shift ? 'primary' : 'grey'" variant="flat" data-testid="shift">
+          {{ tips?.shift ? `Service : ${tips.shift}` : 'Journée clôturée' }}
+        </v-chip>
         <div class="text-display-medium font-weight-bold my-2" data-testid="total">{{ money(tips?.total ?? 0) }}</div>
         <v-chip size="small" :color="live === 'on' ? 'success' : 'warning'" variant="flat" data-testid="live">
           <v-icon start :icon="live === 'on' ? 'mdi-access-point' : 'mdi-access-point-off'" />
@@ -31,7 +34,11 @@
       <v-alert v-if="pushError" type="error" variant="tonal" density="compact" class="mx-4 mb-4">{{ pushError }}</v-alert>
     </v-card>
 
-    <template v-if="me?.role === 'caissier'">
+    <v-alert v-if="tips && !tips.shift" type="success" variant="tonal" class="mb-4" data-testid="day-closed">
+      Journée clôturée : tous les services ont été partagés. La caisse rouvre demain.
+    </v-alert>
+
+    <template v-if="me?.role === 'caissier' && tips?.shift">
       <v-card class="mb-4">
         <v-card-title>Ajouter un pourboire</v-card-title>
         <v-card-text>
@@ -46,13 +53,15 @@
       </v-card>
 
       <v-card class="mb-4">
-        <v-card-title>Partage</v-card-title>
+        <v-card-title>Partage du service : {{ tips.shift }}</v-card-title>
         <v-card-text>
           <div v-if="tips?.shareWith.length" data-testid="share-summary">
             {{ tips.shareWith.length }} personne(s) : {{ tips.shareWith.join(', ') }}
             <div v-if="tips.total" class="text-body-small mt-1">Soit environ {{ money(preview[0]?.amount ?? 0) }} chacun actuellement.</div>
           </div>
-          <div v-else>Personne n'est encore coché pour le partage.</div>
+          <v-alert v-else type="warning" variant="tonal" density="compact">
+            Personne n'est encore coché pour ce service : personne n'est alerté des pourboires.
+          </v-alert>
         </v-card-text>
         <v-card-actions>
           <v-btn to="/partage" prepend-icon="mdi-account-multiple-check">Choisir les personnes</v-btn>
@@ -63,15 +72,18 @@
       </v-card>
     </template>
 
-    <v-card v-if="tips?.lastClose" class="mb-4" color="success" variant="tonal" data-testid="last-close">
-      <v-card-title>Dernier partage d'aujourd'hui</v-card-title>
+    <v-card v-if="tips?.closes.length" class="mb-4" color="success" variant="tonal" data-testid="closes">
+      <v-card-title>Partages d'aujourd'hui</v-card-title>
       <v-card-text>
-        {{ money(tips.lastClose.total) }} partagés entre {{ tips.lastClose.shares.length }} (caisse vidée par {{ tips.lastClose.by }})
-        <v-list density="compact" bg-color="transparent">
-          <v-list-item v-for="s in tips.lastClose.shares" :key="s.username" :title="s.username">
-            <template #append><strong>{{ money(s.amount) }}</strong></template>
-          </v-list-item>
-        </v-list>
+        <div v-for="c in tips.closes" :key="c.shift" class="mb-3" data-testid="close-item">
+          <div class="font-weight-bold">Service : {{ c.shift }} — {{ money(c.total) }} entre {{ c.shares.length }}</div>
+          <div class="text-body-small">Caisse vidée par {{ c.by }}</div>
+          <v-list density="compact" bg-color="transparent">
+            <v-list-item v-for="s in c.shares" :key="s.username" :title="s.username">
+              <template #append><strong>{{ money(s.amount) }}</strong></template>
+            </v-list-item>
+          </v-list>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -97,7 +109,7 @@
     </v-dialog>
 
     <v-dialog v-model="closeDialog" max-width="420">
-      <v-card title="Vider la caisse ?">
+      <v-card :title="`Vider la caisse — service : ${tips?.shift} ?`">
         <v-card-text>
           <template v-if="tips?.shareWith.length">
             <p class="mb-2">{{ money(tips.total) }} seront partagés à parts égales, puis le compteur sera remis à zéro :</p>
@@ -106,7 +118,10 @@
                 <template #append><strong>{{ money(s.amount) }}</strong></template>
               </v-list-item>
             </v-list>
-            <p class="text-body-small">Chaque personne sera notifiée de sa part.</p>
+            <p class="text-body-small">
+              Chaque personne sera notifiée de sa part.
+              {{ isLastShift ? 'C\'est le dernier service : la journée sera clôturée.' : 'Le caissier du service suivant cochera ses propres personnes.' }}
+            </p>
           </template>
           <v-alert v-else type="warning" variant="tonal">Cochez d'abord les personnes qui partagent le pourboire.</v-alert>
           <v-alert v-if="closeError" type="error" variant="tonal" class="mt-2">{{ closeError }}</v-alert>
@@ -134,6 +149,7 @@ watch(error, async (e) => {
   if (e?.statusCode === 401 || e?.statusCode === 403) { me.value = null; await navigateTo('/login') }
 })
 
+const isLastShift = computed(() => !!tips.value && tips.value.closes.length === tips.value.shifts.length - 1)
 const preview = computed(() => splitEqually(tips.value?.total ?? 0, tips.value?.shareWith ?? []))
 const iAmSelected = computed(() => !!me.value && !!tips.value?.shareWith.some(u => u.toLowerCase() === me.value!.username.toLowerCase()))
 

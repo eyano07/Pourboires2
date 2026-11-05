@@ -159,19 +159,23 @@ describe.skipIf(!existsSync(server))('partage, vidage, direct et push', () => {
     // Vidage : partage 100,01 entre alice et bob, compteur à zéro, chacun notifié de sa part
     const res = await post('/api/tips/close', caisse)
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ total: 100.01, by: 'caisse', shares: [{ username: 'alice', amount: 50.01 }, { username: 'bob', amount: 50 }] })
+    expect(await res.json()).toEqual({ shift: 'Matin', total: 100.01, by: 'caisse', shares: [{ username: 'alice', amount: 50.01 }, { username: 'bob', amount: 50 }] })
     await sleep(800)
     const after = await (await call('/api/tips', zoe)).json()
     expect(after.total).toBe(0)
     expect(after.entries).toEqual([])
-    expect(after.lastClose.shares.length).toBe(2)
+    expect(after.closes[0].shares.length).toBe(2)
+    expect(after.shift).toBe('Soir')
+    expect(after.shareWith).toEqual([]) // le caissier du soir choisit ses personnes
     expect(lz.of('tips').at(-1).total).toBe(0)
-    expect(la.of('notify').at(-1)).toMatchObject({ title: 'Caisse vidée' })
+    expect(la.of('notify').at(-1)).toMatchObject({ title: 'Partage du service : Matin' })
     expect(la.of('notify').at(-1).body).toContain('50,01')
     expect(lb.of('notify').at(-1).body).toContain('50,00')
-    expect(pushInbox.at(-1)).toMatchObject({ device: 'alice-tel', msg: { title: 'Caisse vidée' } })
+    expect(pushInbox.at(-1)).toMatchObject({ device: 'alice-tel', msg: { title: 'Partage du service : Matin' } })
 
-    // Après vidage, de nouveaux pourboires repartent de zéro
+    // Service du soir : nouveaux pourboires à partir de zéro, l'équipe du matin n'est plus alertée
+    const aliceAlerts = la.of('notify').length
+    await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["alice","bob"]}' })
     await post('/api/tips', caisse, { amount: 20 })
     expect((await (await call('/api/tips', alice)).json()).total).toBe(20)
 
@@ -180,9 +184,16 @@ describe.skipIf(!existsSync(server))('partage, vidage, direct et push', () => {
     await sleep(500)
     expect(la.events.at(-1)?.event).toBe('closed')
     expect(readFileSync(join(dir, 'data', 'push.json'), 'utf8')).not.toContain('alice-tel')
-    // … et elle est retirée du partage au prochain vidage
+    // … et elle est retirée du partage au prochain vidage (soir), qui clôture la journée
     const res2 = await post('/api/tips/close', caisse)
-    expect((await res2.json()).shares).toEqual([{ username: 'bob', amount: 20 }])
+    expect(await res2.json()).toMatchObject({ shift: 'Soir', shares: [{ username: 'bob', amount: 20 }] })
+    const closed = await (await call('/api/tips', bob)).json()
+    expect(closed.shift).toBeNull()
+    expect(closed.closes.map((c: any) => c.shift)).toEqual(['Matin', 'Soir'])
+    expect((await post('/api/tips', caisse, { amount: 5 })).status).toBe(409)
+    expect((await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["bob"]}' })).status).toBe(409)
+    expect((await post('/api/tips/close', caisse)).status).toBe(409)
+    expect(aliceAlerts).toBeGreaterThan(0)
 
     // Sans connexion : flux en direct refusé
     const anon = listen('')

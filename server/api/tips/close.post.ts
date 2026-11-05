@@ -7,12 +7,13 @@ import { alertEach, money, publishTips, staffNames } from '../../lib/live'
 export default defineEventHandler(async (event) => {
   const me = await requireUser(event, { roles: ['caissier'] })
   const result = await closeTips(me.username, await staffNames())
+  if (result === 'day_closed') throw createError({ statusCode: 409, statusMessage: 'Journée déjà clôturée' })
   if (result === 'empty') throw createError({ statusCode: 400, statusMessage: 'La caisse est déjà vide' })
   if (result === 'no_selection') throw createError({ statusCode: 400, statusMessage: 'Cochez au moins une personne pour le partage' })
   await publishTips()
   alertEach(result.shares.map(s => ({
     username: s.username,
-    title: 'Caisse vidée',
+    title: `Partage du service : ${result.shift}`,
     body: `Votre part : ${money(s.amount)} (total ${money(result.total)} partagé entre ${result.shares.length})`,
   })))
   return result

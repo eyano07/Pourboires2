@@ -34,7 +34,7 @@ describe('validateAmount', () => {
 describe('store', () => {
   it('crée le fichier du jour vide', async () => {
     const d = await readTips(dir, day1)
-    expect(d).toEqual({ date: '2026-11-05', entries: [], shareWith: [], lastClose: null })
+    expect(d).toEqual({ date: '2026-11-05', entries: [], shareWith: [], closes: [] })
     expect(JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8')).date).toBe('2026-11-05')
   })
   it('ajoute des pourboires avec le nom d’utilisateur et calcule le total sans erreur flottante', async () => {
@@ -48,7 +48,7 @@ describe('store', () => {
   it('supprime l’historique au changement de jour', async () => {
     await addTip('alice', 100, dir, day1)
     const d = await readTips(dir, day2)
-    expect(d).toEqual({ date: '2026-11-06', entries: [], shareWith: [], lastClose: null })
+    expect(d).toEqual({ date: '2026-11-06', entries: [], shareWith: [], closes: [] })
     expect(JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8')).entries).toEqual([])
   })
   it('ajouter un pourboire après minuit repart de zéro', async () => {
@@ -58,7 +58,7 @@ describe('store', () => {
     expect(totalOf(d.entries)).toBe(200)
   })
   it('supprime sa propre saisie, refuse celle d’un autre', async () => {
-    const e = await addTip('alice', 50, dir, day1)
+    const e = await addTip('alice', 50, dir, day1) as { id: string }
     expect(await removeTip(e.id, 'bob', dir, day1)).toBe('forbidden')
     expect(await removeTip('inconnu', 'alice', dir, day1)).toBe('not_found')
     expect(await removeTip(e.id, 'alice', dir, day1)).toBe('ok')
@@ -67,7 +67,7 @@ describe('store', () => {
   it('le fichier du jour ne garde que l’utilisateur et le montant (plus un id technique)', async () => {
     await addTip('alice', 100, dir, day1)
     const raw = JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8'))
-    expect(Object.keys(raw)).toEqual(['date', 'entries', 'shareWith', 'lastClose'])
+    expect(Object.keys(raw)).toEqual(['date', 'entries', 'shareWith', 'closes'])
     expect(Object.keys(raw.entries[0]).sort()).toEqual(['amount', 'id', 'username'])
   })
   it('nettoie les anciens champs (ex. time) d’un fichier existant', async () => {
@@ -106,17 +106,34 @@ describe('partage et vidage', () => {
       expect(Math.round(parts.reduce((t, p) => t + p.amount * 100, 0))).toBe(100007)
     }
   })
-  it('vide la caisse, garde le résultat du jour, garde la sélection', async () => {
-    await addTip('caisse', 100, dir, day1)
-    await addTip('caisse', 50.5, dir, day1)
+  it('journée type : service du matin, service du soir, puis journée clôturée', async () => {
+    // Matin
     await setShareWith(['bob', 'alice', 'alice'], dir, day1)
-    const r = await closeTips('caisse', ['alice', 'bob', 'caisse'], dir, day1)
-    expect(r).toEqual({ total: 150.5, by: 'caisse', shares: [{ username: 'alice', amount: 75.25 }, { username: 'bob', amount: 75.25 }] })
-    const d = await readTips(dir, day1)
-    expect(d.entries).toEqual([])
+    await addTip('caisse1', 100, dir, day1)
+    await addTip('caisse1', 50.5, dir, day1)
+    const m = await closeTips('caisse1', ['alice', 'bob', 'zoe'], dir, day1)
+    expect(m).toEqual({ shift: 'Matin', total: 150.5, by: 'caisse1', shares: [{ username: 'alice', amount: 75.25 }, { username: 'bob', amount: 75.25 }] })
+    let d = await readTips(dir, day1)
     expect(totalOf(d.entries)).toBe(0)
-    expect(d.shareWith).toEqual(['alice', 'bob'])
-    expect(d.lastClose?.total).toBe(150.5)
+    expect(d.shareWith).toEqual([]) // le caissier du soir choisit ses personnes
+    // Soir
+    await setShareWith(['zoe'], dir, day1)
+    await addTip('caisse2', 30, dir, day1)
+    const s = await closeTips('caisse2', ['alice', 'bob', 'zoe'], dir, day1)
+    expect(s).toMatchObject({ shift: 'Soir', total: 30, shares: [{ username: 'zoe', amount: 30 }] })
+    d = await readTips(dir, day1)
+    expect(d.closes.map(c => c.shift)).toEqual(['Matin', 'Soir'])
+    // Clôturée : plus de saisie, de sélection ni de vidage
+    expect(await addTip('caisse2', 5, dir, day1)).toBe('day_closed')
+    expect(await setShareWith(['zoe'], dir, day1)).toBe('day_closed')
+    expect(await closeTips('caisse2', ['zoe'], dir, day1)).toBe('day_closed')
+    // Lendemain : tout recommence
+    expect(await readTips(dir, day2)).toEqual({ date: '2026-11-06', entries: [], shareWith: [], closes: [] })
+    expect(await addTip('caisse1', 5, dir, day2)).toMatchObject({ amount: 5 })
+  })
+  it('reprend un ancien fichier (lastClose)', async () => {
+    writeFileSync(join(dir, 'tips.json'), JSON.stringify({ date: '2026-11-05', entries: [], shareWith: [], lastClose: { total: 5, shares: [{ username: 'a', amount: 5 }], by: 'c' } }))
+    expect((await readTips(dir, day1)).closes).toEqual([{ shift: 'Matin', total: 5, shares: [{ username: 'a', amount: 5 }], by: 'c' }])
   })
   it('refuse de vider une caisse vide ou sans personne cochée', async () => {
     expect(await closeTips('caisse', ['alice'], dir, day1)).toBe('empty')
@@ -130,6 +147,7 @@ describe('partage et vidage', () => {
     await addTip('caisse', 10, dir, day1)
     await setShareWith(['alice'], dir, day1)
     await closeTips('caisse', ['alice'], dir, day1)
-    expect(await readTips(dir, day2)).toEqual({ date: '2026-11-06', entries: [], shareWith: [], lastClose: null })
+    await setShareWith(['alice'], dir, day1)
+    expect(await readTips(dir, day2)).toEqual({ date: '2026-11-06', entries: [], shareWith: [], closes: [] })
   })
 })
