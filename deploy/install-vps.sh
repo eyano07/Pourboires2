@@ -3,11 +3,13 @@
 # Télécharge le code, installe Node.js localement s'il manque, construit, génère data/ et .env, démarre.
 # Rien n'est écrit en dehors du dossier de l'application ; aucun droit root nécessaire.
 # Dépôt public : aucun jeton nécessaire.
-# Variables facultatives : PORT (8087), APP_DIR, ADMIN_USER, ADMIN_PASSWORD
+# Variables facultatives : PORT (défaut : port actuel, sinon 8087), APP_DIR, ADMIN_NAME, ADMIN_USER, ADMIN_PASSWORD
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$HOME/pourboires}"
-PORT="${PORT:-8087}"
+# Port : celui demandé, sinon celui de l'installation existante, sinon 8087.
+EXISTING_PORT="$(sed -n 's/^PORT=//p' "$APP_DIR/.env" 2>/dev/null | head -n1 || true)"
+PORT="${PORT:-${EXISTING_PORT:-8087}}"
 REPO_SLUG="${REPO_SLUG:-eyano07/Pourboires2}"
 BRANCH="${BRANCH:-main}"
 NODE_MAJOR=22
