@@ -36,3 +36,10 @@ Toutes concernent des outils de construction (glob, minimatch, archiver…) abse
 4. **Le script installe toujours la dernière version de `main`** : quiconque peut pousser sur le dépôt contrôle le code installé.
 5. **Déconnexion** : le cookie est supprimé du navigateur mais une copie reste valable jusqu'à 12 h (sauf changement de mot de passe).
 6. **Mémoire** : la construction demande environ 1 Go ; sur un très petit VPS, ajouter de la mémoire d'échange ou construire ailleurs (`deploy/deploy.sh`).
+
+## Ajout du 5 novembre (partage, vidage, notifications) — vérifié
+- Droits : seul le caissier coche, vide la caisse et voit la liste du personnel ; l'admin ne peut pas être coché.
+- Partage au centime près sans perte (testé pour 1 à 13 personnes).
+- Connexions en direct : limitées à 500, coupées si le compte est supprimé ou le mot de passe changé, aucune requête pendant l'inactivité (mesuré dans Chrome).
+- Web Push testé de bout en bout avec un faux service de push HTTPS qui déchiffre les messages : seules les personnes cochées reçoivent ; appareils disparus (410) retirés ; abonnements en HTTPS uniquement ; fichiers en 600.
+- Non testé : réception réelle sur un téléphone (impossible sans HTTPS ni accès aux services de push depuis l'environnement de test).

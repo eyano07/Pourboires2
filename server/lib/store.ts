@@ -8,9 +8,15 @@ export interface TipEntry {
   username: string
   amount: number
 }
+export interface Share { username: string, amount: number }
+export interface CloseResult { total: number, shares: Share[], by: string }
 export interface TipsFile {
   date: string
   entries: TipEntry[]
+  /** Personnes cochées par la caisse : elles partagent le pourboire et reçoivent les notifications. */
+  shareWith: string[]
+  /** Dernier vidage du jour (effacé au changement de jour). */
+  lastClose: CloseResult | null
 }
 
 export const TIMEZONE = 'Africa/Kinshasa'
@@ -68,11 +74,13 @@ async function load(dir: string, now: Date): Promise<TipsFile> {
       current = {
         date: parsed.date,
         entries: parsed.entries.map((e: TipEntry) => ({ id: e.id, username: e.username, amount: e.amount })),
+        shareWith: Array.isArray(parsed.shareWith) ? parsed.shareWith.filter((u: unknown) => typeof u === 'string') : [],
+        lastClose: parsed.lastClose && Array.isArray(parsed.lastClose.shares) ? parsed.lastClose : null,
       }
     }
   } catch { /* fichier absent ou illisible */ }
   if (!current || current.date !== today) {
-    current = { date: today, entries: [] }
+    current = { date: today, entries: [], shareWith: [], lastClose: null }
     await fs.mkdir(dir, { recursive: true, mode: 0o700 })
     await writeAtomic(file, current)
   }
@@ -109,5 +117,54 @@ export function removeTip(
     data.entries = data.entries.filter(e => e.id !== id)
     await writeAtomic(join(dir, 'tips.json'), data)
     return 'ok'
+  })
+}
+
+/**
+ * Partage un montant à parts égales, au centime près.
+ * Les centimes restants (ex. 10 $ / 3) vont un par un aux premiers de la liste (ordre alphabétique).
+ */
+export function splitEqually(total: number, usernames: string[]): Share[] {
+  const names = [...new Set(usernames)].sort((a, b) => a.localeCompare(b, 'fr'))
+  if (!names.length) return []
+  const cents = toCents(total)
+  const base = Math.floor(cents / names.length)
+  const rest = cents - base * names.length
+  return names.map((username, i) => ({ username, amount: (base + (i < rest ? 1 : 0)) / 100 }))
+}
+
+/** Enregistre les personnes cochées par la caisse. */
+export function setShareWith(
+  usernames: string[], dir: string = dataDir(), now: Date = new Date(),
+): Promise<string[]> {
+  return serial(async () => {
+    const data = await load(dir, now)
+    data.shareWith = [...new Set(usernames)].sort((a, b) => a.localeCompare(b, 'fr'))
+    await writeAtomic(join(dir, 'tips.json'), data)
+    return data.shareWith
+  })
+}
+
+export type CloseError = 'empty' | 'no_selection'
+
+/**
+ * Vide la caisse : calcule les parts entre les personnes cochées (parmi `existing`, les comptes
+ * qui existent encore), remet le compteur à zéro et garde le résultat jusqu'à la fin de la journée.
+ */
+export function closeTips(
+  by: string, existing: string[], dir: string = dataDir(), now: Date = new Date(),
+): Promise<CloseResult | CloseError> {
+  return serial(async () => {
+    const data = await load(dir, now)
+    const total = totalOf(data.entries)
+    if (total <= 0) return 'empty'
+    const known = new Set(existing.map(u => u.toLowerCase()))
+    const people = data.shareWith.filter(u => known.has(u.toLowerCase()))
+    if (!people.length) return 'no_selection'
+    const result: CloseResult = { total, shares: splitEqually(total, people), by }
+    data.entries = []
+    data.lastClose = result
+    await writeAtomic(join(dir, 'tips.json'), data)
+    return result
   })
 }

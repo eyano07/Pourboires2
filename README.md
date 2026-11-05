@@ -21,9 +21,17 @@ Production : `npm run build` puis `SESSION_SECRET=... npm start` (ajouter `COOKI
 
 Option : `--temp` sur `npm run user:add` crée aussi un compte dont le mot de passe doit être changé à la première connexion.
 
+## Partage, vidage et notifications
+- **Page « Partage »** (caissier) : liste tous les comptes du personnel (sauf administrateurs), avec l'indicateur « en ligne ». Le caissier coche les personnes qui partageront le pourboire.
+- **Notifications** : seules les personnes cochées sont alertées à chaque nouveau pourboire (pas l'auteur de la saisie).
+- **Vider la caisse** (caissier) : aperçu des parts, puis partage à parts égales au centime près (les centimes restants vont aux premiers par ordre alphabétique), compteur remis à zéro, chaque personne notifiée de sa part. Le dernier partage reste affiché jusqu'au soir ; la sélection reste valable jusqu'au changement de jour.
+- **En direct sans interrogation** : chaque écran ouvert garde une seule connexion (Server-Sent Events) sur laquelle le serveur pousse les changements. Aucune requête répétée.
+- **Notifications sur téléphone (appli fermée)** : Web Push, à activer avec le bouton « Activer ». Les navigateurs ne l'autorisent **qu'en HTTPS**. Sur iPhone (iOS 16.4+), il faut aussi ajouter le site à l'écran d'accueil. Clés générées dans `data/vapid.json`, abonnements dans `data/push.json`. Variable facultative `PUSH_CONTACT=mailto:vous@exemple.com`. Le VPS doit pouvoir joindre les services de push (Google, Mozilla, Apple) en HTTPS.
+
 ## Fichiers de données (`data/`)
 - `users.json` : comptes `{ username, role, passwordHash, mustChangePassword }` (mot de passe haché).
-- `tips.json` : pourboires du jour uniquement `{ date, entries: [{ id, username, amount }] }` : seulement l'utilisateur et le montant (l'id sert à supprimer une saisie). Remis à zéro automatiquement au changement de jour (fuseau Africa/Kinshasa).
+- `tips.json` : pourboires en cours `{ date, entries: [{ id, username, amount }], shareWith, lastClose }` : utilisateur et montant de chaque saisie, personnes cochées, dernier partage du jour.
+- `vapid.json`, `push.json` : clés et abonnements des notifications (créés automatiquement). Remis à zéro automatiquement au changement de jour (fuseau Africa/Kinshasa).
 
 Ces deux fichiers sont ignorés par Git. `DATA_DIR` permet de changer le dossier.
 

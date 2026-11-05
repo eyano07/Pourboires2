@@ -44,3 +44,9 @@ Les comptes sont dans `data/users.json` (mot de passe haché avec scrypt, jamais
 - « Ce qui reste » = total des pourboires du jour. Pas de retraits/distribution dans cette version.
 - Un seul restaurant, une seule caisse par jour.
 - Le secret de session vient de la variable `SESSION_SECRET`.
+
+## Évolution : partage, vidage, notifications
+- `shareWith` (personnes cochées par la caisse) et `lastClose` (dernier partage) dans `tips.json`, effacés au changement de jour.
+- `PUT /api/tips/share`, `POST /api/tips/close`, `GET /api/staff` (caissier).
+- `GET /api/events` : Server-Sent Events (état de la caisse, alertes ciblées, présence). Session revérifiée toutes les 25 s.
+- `GET /api/push/key`, `POST /api/push/subscribe|unsubscribe` : Web Push (HTTPS requis côté navigateur).

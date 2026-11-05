@@ -1,7 +1,9 @@
 {
   "name": "pourboires-chez-biso",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "nuxt dev",
@@ -16,9 +18,12 @@
     "vue": "^3.5.45",
     "vue-router": "^4.6.4",
     "vuetify": "^4.3.2",
-    "vuetify-nuxt-module": "^1.0.0-rc.6"
+    "vuetify-nuxt-module": "^1.0.0-rc.6",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@types/web-push": "^3.6.4",
+    "http_ece": "^1.2.1",
     "vitest": "^5.1.0"
   }
 }

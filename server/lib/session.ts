@@ -24,6 +24,17 @@ export function setSessionCookie(event: H3Event, user: { username: string, passw
 
 export interface CurrentUser { username: string, role: Role, mustChangePassword: boolean }
 
+/** Valide un jeton de session (aussi utilisé pour revérifier les connexions en direct). */
+export async function userFromToken(token: string | undefined) {
+  const secret = sessionSecret()
+  const s = readToken(token, secret)
+  const found = s ? await findUser(s.u, dataDir()) : null
+  // Session refusée si le mot de passe a changé depuis la connexion.
+  return found && s && passwordVersion(found.passwordHash, secret) === s.v ? found : null
+}
+
+export const sessionToken = (event: H3Event) => getCookie(event, COOKIE)
+
 /**
  * Utilisateur connecté, relu dans users.json : un compte supprimé ou dont le rôle a changé
  * est pris en compte immédiatement.
@@ -32,11 +43,7 @@ export async function requireUser(
   event: H3Event,
   opts: { roles?: Role[], allowTemporaryPassword?: boolean } = {},
 ): Promise<CurrentUser> {
-  const secret = sessionSecret()
-  const s = readToken(getCookie(event, COOKIE), secret)
-  const found = s ? await findUser(s.u, dataDir()) : null
-  // Session refusée si le mot de passe a changé depuis la connexion.
-  const user = found && s && passwordVersion(found.passwordHash, secret) === s.v ? found : null
+  const user = await userFromToken(sessionToken(event))
   if (!user) throw createError({ statusCode: 401, statusMessage: 'Non connecté' })
   const mustChangePassword = !!user.mustChangePassword
   if (mustChangePassword && !opts.allowTemporaryPassword) {
