@@ -5,8 +5,9 @@
       <v-card-text>
         <v-form @submit.prevent="create">
           <v-text-field v-model="form.name" label="Noms" placeholder="ex. Grace Mantekila" autocomplete="off" data-testid="new-name" class="mb-2" />
-          <v-text-field v-model="form.username" label="Identifiant de connexion" placeholder="ex. grace" autocomplete="off"
-                        hint="Lettres, chiffres, . _ - (sans espace)" persistent-hint class="mb-2" />
+          <v-text-field v-model="form.username" label="Identifiant de connexion" placeholder="ex. grace.mantekila" autocomplete="off"
+                        hint="Généré à partir des noms (modifiable)" persistent-hint class="mb-2" data-testid="new-username"
+                        @update:model-value="usernameTouched = true" />
           <v-select v-model="form.role" label="Type de compte" :items="roles" item-title="label" item-value="value" />
           <v-text-field
             v-model="form.password" label="Mot de passe par défaut" autocomplete="off"
@@ -101,6 +102,23 @@ function generate() {
 }
 
 const form = reactive({ name: '', username: '', role: 'caissier', password: '' })
+
+// Identifiant généré à partir des noms : premier et dernier mot, sans accents (« Grâce Mantekila » -> grace.mantekila).
+// Un numéro est ajouté s'il est déjà pris. Tant que l'admin ne le modifie pas lui-même, il suit les noms.
+const usernameTouched = ref(false)
+function usernameFromName(name: string): string {
+  const words = name.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().split(/\s+/)
+    .map(w => w.replace(/[^a-z0-9]/g, '')).filter(Boolean)
+  if (!words.length) return ''
+  const base = (words.length > 1 ? `${words[0]}.${words[words.length - 1]}` : words[0]).slice(0, 27)
+  const taken = new Set((users.value ?? []).map(u => u.username.toLowerCase()))
+  let candidate = base
+  for (let i = 2; taken.has(candidate); i++) candidate = `${base}${i}`
+  return candidate
+}
+watch(() => form.name, (name) => {
+  if (!usernameTouched.value) { form.username = usernameFromName(name); nextTick(() => { usernameTouched.value = false }) }
+})
 const error = ref('')
 const info = ref('')
 const saving = ref(false)
@@ -110,7 +128,7 @@ async function create() {
   try {
     const u = await $fetch<U>('/api/users', { method: 'POST', body: { ...form } })
     info.value = `Compte de ${u.name} (identifiant « ${u.username} ») créé. Mot de passe par défaut à lui communiquer : ${form.password}`
-    form.name = ''; form.username = ''; form.password = ''
+    form.name = ''; form.username = ''; form.password = ''; nextTick(() => { usernameTouched.value = false })
     await refresh()
   } catch (e: any) {
     error.value = e?.data?.statusMessage || 'Création impossible'

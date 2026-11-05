@@ -55,5 +55,6 @@ case "${1:-}" in
     ;;
   restart) "$0" stop; "$0" start ;;
   user-add) shift; DATA_DIR="$DIR/data" node "$DIR/scripts/add-user.mjs" "$@" ;;
-  *) echo "Usage : $0 start|stop|status|restart|user-add <nom> <mot_de_passe> <role> [--temp]" >&2; exit 1 ;;
+  import) shift; DATA_DIR="$DIR/data" node "$DIR/scripts/import-users.mjs" "$@" ;;
+  *) echo "Usage : $0 start|stop|status|restart|user-add <identifiant> <mot_de_passe> <role> [--temp] [--name \"Noms\"]|import <fichier.csv> <mot_de_passe_par_defaut>" >&2; exit 1 ;;
 esac

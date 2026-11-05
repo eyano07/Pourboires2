@@ -24,6 +24,8 @@ Option : `--temp` sur `npm run user:add` crée aussi un compte dont le mot de pa
 ## Fonctionnement
 
 ### Comptes
+- **Import d'une liste** (sur le VPS) : `./control.sh import liste.csv <mot_de_passe_par_defaut>` — colonnes `identifiant;Noms;role`. Les comptes existants ne sont jamais modifiés ; chacun devra changer le mot de passe par défaut à sa première connexion. Ne mettez pas la liste du personnel dans le dépôt (il est public).
+- Dans la page d'administration, l'**identifiant est généré à partir des noms** (premier et dernier mot, sans accents : « Grâce Mantekila » → `grace.mantekila`, numéro ajouté s'il est déjà pris), et reste modifiable.
 - L'administrateur crée chaque compte avec ses **Noms** (affichés partout dans l'application), un **identifiant de connexion**, un type de compte et un mot de passe par défaut. Les noms se modifient ensuite depuis le menu « ⋮ » de chaque compte.
 
 ### Caisse en deux devises
