@@ -12,7 +12,7 @@ BRANCH="${BRANCH:-main}"
 NODE_MAJOR=22
 TARBALL_URL="${TARBALL_URL:-https://api.github.com/repos/$REPO_SLUG/tarball/$BRANCH}"
 
-die() { echo "ERREUR : $*" >&2; exit 1; }
+die() { echo "ERREUR : $*" >&2; rm -f "$APP_DIR/node.tgz" "$APP_DIR/node.sums" "$APP_DIR/code.tgz"; exit 1; }
 
 # --- Garde-fous : on ne travaille que dans un sous-dossier du dossier personnel ---
 case "$APP_DIR" in "$HOME"/?*) ;; *) die "APP_DIR doit être un sous-dossier de $HOME (reçu : $APP_DIR)";; esac
