@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pilote l'application. Fonctionne UNIQUEMENT dans son propre dossier (celui de ce script).
-# Usage : ./control.sh start | stop | status | restart | user-add <nom> <mot_de_passe> <admin|caissier|lecteur> [--temp]
+# Usage : ./control.sh start | stop | status | restart | user-add <identifiant> <mot_de_passe> <admin|caissier|lecteur> [--temp] [--name "Noms"]
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR" || exit 1

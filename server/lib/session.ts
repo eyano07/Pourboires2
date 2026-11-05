@@ -22,7 +22,7 @@ export function setSessionCookie(event: H3Event, user: { username: string, passw
   })
 }
 
-export interface CurrentUser { username: string, role: Role, mustChangePassword: boolean }
+export interface CurrentUser { username: string, name: string, role: Role, mustChangePassword: boolean }
 
 /** Valide un jeton de session (aussi utilisé pour revérifier les connexions en direct). */
 export async function userFromToken(token: string | undefined) {
@@ -52,5 +52,5 @@ export async function requireUser(
   if (opts.roles && !opts.roles.includes(user.role)) {
     throw createError({ statusCode: 403, statusMessage: 'Accès refusé' })
   }
-  return { username: user.username, role: user.role, mustChangePassword }
+  return { username: user.username, name: user.name || user.username, role: user.role, mustChangePassword }
 }

@@ -1,8 +1,9 @@
 import { createError, createEventStream, defineEventHandler } from 'h3'
 import { requireUser, sessionToken, userFromToken } from '../lib/session'
 import { addClient, broadcast, removeClient, type LiveClient } from '../lib/events'
-import { readTips } from '../lib/store'
-import { snapshot } from '../lib/live'
+import { readEarnings, readTips } from '../lib/store'
+import { viewFor } from '../lib/live'
+import { nameMap } from '../lib/users'
 
 /**
  * Connexion en direct (Server-Sent Events). Le navigateur garde UNE connexion ouverte et
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
   let closed = false
   const client: LiveClient = {
     username: me.username,
+    role: me.role,
     send: (name, data) => {
       if (closed) return
       stream.push({ event: name, data: JSON.stringify(data) }).catch(() => client.close())
@@ -37,6 +39,6 @@ export default defineEventHandler(async (event) => {
   }, 25000)
 
   stream.onClosed(() => { client.close(); broadcast('presence', {}) })
-  client.send('tips', snapshot(await readTips()))
+  client.send('tips', viewFor(me, await readTips(), await nameMap(), await readEarnings()))
   return stream.send()
 })

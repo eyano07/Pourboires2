@@ -1,10 +1,12 @@
 <template>
   <v-app>
-    <v-app-bar color="primary" density="comfortable">
-      <v-app-bar-title>Pourboires chez Biso</v-app-bar-title>
+    <v-app-bar color="primary" density="comfortable" flat>
+      <v-app-bar-title>
+        <span class="font-weight-bold">Pourboires</span><span class="d-none d-sm-inline font-weight-light"> chez Biso</span>
+      </v-app-bar-title>
       <template v-if="me" #append>
-        <v-chip class="mr-2 d-none d-sm-flex" variant="flat" color="white" prepend-icon="mdi-account">
-          {{ me.username }} · {{ roleLabel(me.role) }}
+        <v-chip class="mr-2 d-none d-md-flex" variant="flat" color="white" prepend-icon="mdi-account">
+          {{ prettyName(me.username) }} · {{ roleLabel(me.role) }}
         </v-chip>
         <template v-if="!me.mustChangePassword">
           <v-btn v-if="me.role === 'admin'" icon="mdi-account-group" aria-label="Utilisateurs" to="/admin" />
@@ -16,12 +18,12 @@
       </template>
     </v-app-bar>
     <v-main>
-      <v-container style="max-width: 720px">
+      <v-container class="pt-4 pb-12" style="max-width: 640px">
         <NuxtPage />
       </v-container>
     </v-main>
-    <v-snackbar :model-value="!!notices.length" color="success" location="top" :timeout="6000"
-                multi-line @update:model-value="v => !v && notices.shift()">
+    <v-snackbar :model-value="!!notices.length" color="primary" location="top" :timeout="6000"
+                multi-line rounded="lg" @update:model-value="v => !v && notices.shift()">
       <div class="font-weight-bold">{{ notices[0]?.title }}</div>
       <div>{{ notices[0]?.body }}</div>
       <template #actions><v-btn variant="text" @click="notices.shift()">OK</v-btn></template>

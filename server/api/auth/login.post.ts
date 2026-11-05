@@ -37,5 +37,5 @@ export default defineEventHandler(async (event) => {
   }
   failures.delete(key)
   setSessionCookie(event, user)
-  return { username: user.username, role: user.role, mustChangePassword: !!user.mustChangePassword }
+  return { username: user.username, name: user.name || user.username, role: user.role, mustChangePassword: !!user.mustChangePassword }
 })

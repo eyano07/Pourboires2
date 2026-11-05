@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
   const selected = new Set(tips.shareWith.map(u => u.toLowerCase()))
   return users.filter(u => u.role !== 'admin').map(u => ({
     username: u.username,
+    name: u.name || u.username,
     role: u.role,
     online: online.has(u.username.toLowerCase()),
     selected: selected.has(u.username.toLowerCase()),

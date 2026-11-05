@@ -61,21 +61,27 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     expect((await call('/api/tips', caisse.cookie, { method: 'POST', body: '{"amount":-3}' })).status).toBe(400)
     expect((await call('/api/tips', caisse.cookie, { method: 'POST', body: '{"amount":"abc"}' })).status).toBe(400)
 
-    // Le lecteur voit la caisse mais ne peut pas ajouter ni supprimer
+    // Lecteur non sélectionné : aucun montant visible
+    const hidden = await (await call('/api/tips', patron.cookie)).json()
+    expect(hidden.totals).toBeNull()
+    expect(hidden.entries).toEqual([])
+    expect(JSON.stringify(hidden)).not.toContain('150')
+    // Une fois sélectionné, il voit la caisse mais ne peut pas ajouter ni supprimer
+    expect((await call('/api/tips/share', caisse.cookie, { method: 'PUT', body: '{"usernames":["patron"]}' })).status).toBe(200)
     const view = await (await call('/api/tips', patron.cookie)).json()
-    expect(view.total).toBe(150.5)
+    expect(view.totals).toEqual({ USD: 150.5, CDF: 0 })
     expect(view.entries.map((e: any) => e.username)).toEqual(['caisse', 'caisse'])
     expect((await call('/api/tips', patron.cookie, { method: 'POST', body: '{"amount":10}' })).status).toBe(403)
     expect((await call(`/api/tips/${view.entries[0].id}`, patron.cookie, { method: 'DELETE' })).status).toBe(403)
 
     // Le caissier supprime une saisie
     expect((await call(`/api/tips/${view.entries[0].id}`, caisse.cookie, { method: 'DELETE' })).status).toBe(200)
-    expect((await (await call('/api/tips', patron.cookie)).json()).total).toBe(50.5)
+    expect((await (await call('/api/tips', patron.cookie)).json()).totals.USD).toBe(50.5)
 
     // Le fichier JSON contient bien nom + montant, et uniquement le jour courant
     const file = JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8'))
     expect(file.entries).toHaveLength(1)
-    expect(Object.keys(file.entries[0]).sort()).toEqual(['amount', 'id', 'username'])
+    expect(Object.keys(file.entries[0]).sort()).toEqual(['amount', 'currency', 'id', 'username'])
     expect(file.entries[0]).toMatchObject({ username: 'caisse', amount: 50.5 })
   })
 
@@ -86,14 +92,14 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     // Seul l'administrateur gère les utilisateurs
     const caisse = await login('caisse', 'motdepasse1')
     expect((await call('/api/users', caisse.cookie)).status).toBe(403)
-    expect((await post('/api/users', caisse.cookie, { username: 'x1', role: 'lecteur', password: 'defaut1' })).status).toBe(403)
+    expect((await post('/api/users', caisse.cookie, { name: 'X Un', username: 'x1', role: 'lecteur', password: 'defaut1' })).status).toBe(403)
     expect((await call('/api/users')).status).toBe(401)
 
     // Création avec mot de passe par défaut
-    const created = await post('/api/users', admin.cookie, { username: 'marie', role: 'caissier', password: 'defaut1' })
+    const created = await post('/api/users', admin.cookie, { name: 'Marie Kabila', username: 'marie', role: 'caissier', password: 'defaut1' })
     expect(created.status).toBe(200)
-    expect((await post('/api/users', admin.cookie, { username: 'MARIE', role: 'caissier', password: 'defaut1' })).status).toBe(409)
-    expect((await post('/api/users', admin.cookie, { username: 'zoe', role: 'pirate', password: 'defaut1' })).status).toBe(400)
+    expect((await post('/api/users', admin.cookie, { name: 'Marie Deux', username: 'MARIE', role: 'caissier', password: 'defaut1' })).status).toBe(409)
+    expect((await post('/api/users', admin.cookie, { name: 'Zoe', username: 'zoe', role: 'pirate', password: 'defaut1' })).status).toBe(400)
     const list = await (await call('/api/users', admin.cookie)).json()
     expect(JSON.stringify(list)).not.toContain('passwordHash')
 
@@ -133,7 +139,7 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
   it('un ancien cookie est invalide après changement ou réinitialisation du mot de passe', async () => {
     const admin = await login('chef', 'adminpass1')
     const post = (path: string, cookie: string, body: unknown) => call(path, cookie, { method: 'POST', body: JSON.stringify(body) })
-    await post('/api/users', admin.cookie, { username: 'paul', role: 'caissier', password: 'defaut1' })
+    await post('/api/users', admin.cookie, { name: 'Paul', username: 'paul', role: 'caissier', password: 'defaut1' })
     const vole = await login('paul', 'defaut1')
     const p = await login('paul', 'defaut1')
     const changed = await post('/api/auth/password', p.cookie, { current: 'defaut1', next: 'nouveau22' })
@@ -163,7 +169,7 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
 
   it('déconnexion et /me', async () => {
     const { cookie } = await login('patron', 'motdepasse2')
-    expect(await (await call('/api/auth/me', cookie)).json()).toEqual({ username: 'patron', role: 'lecteur', mustChangePassword: false })
+    expect(await (await call('/api/auth/me', cookie)).json()).toEqual({ username: 'patron', name: 'patron', role: 'lecteur', mustChangePassword: false })
     const out = await call('/api/auth/logout', cookie, { method: 'POST' })
     expect(out.status).toBe(200)
   })

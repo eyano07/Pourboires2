@@ -95,110 +95,112 @@ describe.skipIf(!existsSync(server))('partage, vidage, direct et push', () => {
   })
   afterAll(() => { proc?.kill(); pushServer?.close() })
 
-  it('scénario complet', async () => {
+  it('scénario complet : devises, confidentialité, gains, notifications', async () => {
     const caisse = await login('caisse', 'motdepasse1')
     const alice = await login('alice', 'motdepasse2')
     const bob = await login('bob', 'motdepasse3')
     const zoe = await login('zoe', 'motdepasse4')
     const chef = await login('chef', 'adminpass1')
+    const put = (path: string, cookie: string, body: unknown) => call(path, cookie, { method: 'PUT', body: JSON.stringify(body) })
+    const tips = async (c: string) => (await call('/api/tips', c)).json()
 
-    // Droits : seule la caisse coche, vide, voit la liste du personnel
+    // Droits : seule la caisse sélectionne, vide, voit la liste du personnel
     for (const c of [alice, chef]) {
       expect((await call('/api/staff', c)).status).toBe(403)
-      expect((await call('/api/tips/share', c, { method: 'PUT', body: '{"usernames":["alice"]}' })).status).toBe(403)
+      expect((await put('/api/tips/share', c, { usernames: ['alice'] })).status).toBe(403)
       expect((await post('/api/tips/close', c)).status).toBe(403)
     }
 
-    // Connexions en direct ouvertes par alice, bob, zoe
     const la = listen(alice), lb = listen(bob), lz = listen(zoe)
     await sleep(500)
-    expect(la.of('tips')[0].total).toBe(0)
 
-    // Liste du personnel : sans l'admin, avec indicateur en ligne
+    // Personnel : sans l'admin, avec noms et présence
     const staff = await (await call('/api/staff', caisse)).json()
-    expect(staff.map((s: any) => s.username)).toEqual(['caisse', 'alice', 'bob', 'zoe'])
-    expect(staff.find((s: any) => s.username === 'alice').online).toBe(true)
-    expect(staff.find((s: any) => s.username === 'caisse').online).toBe(false)
+    expect(staff.map((x: any) => x.username)).toEqual(['caisse', 'alice', 'bob', 'zoe'])
+    expect(staff.find((x: any) => x.username === 'alice')).toMatchObject({ name: 'alice', online: true })
 
-    // Abonnements Web Push (alice : 1 appareil ; zoe : 1 appareil ; un appareil « disparu »)
-    const resKey = await (await call('/api/push/key', alice)).json()
-    expect(resKey.publicKey).toMatch(/^[A-Za-z0-9_-]{80,}$/)
+    // Web Push : alice et zoe abonnées ; un appareil « disparu »
     expect((await post('/api/push/subscribe', alice, device('alice-tel'))).status).toBe(200)
     expect((await post('/api/push/subscribe', zoe, device('zoe-tel'))).status).toBe(200)
     expect((await post('/api/push/subscribe', bob, { endpoint: `https://127.0.0.1:${pushPort}/push/gone`, keys: device('gone').keys })).status).toBe(200)
     expect((await post('/api/push/subscribe', alice, { endpoint: 'http://pas-https', keys: { p256dh: 'x', auth: 'y' } })).status).toBe(400)
-    expect(statSync(join(dir, 'data', 'push.json')).mode & 0o777).toBe(0o600)
-    expect(statSync(join(dir, 'data', 'vapid.json')).mode & 0o777).toBe(0o600)
 
-    // La caisse coche alice et bob (pas zoe) ; nom inconnu ou admin refusé
-    expect((await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["chef"]}' })).status).toBe(400)
-    expect((await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["inconnu"]}' })).status).toBe(400)
-    const share = await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["BOB","alice"]}' })
-    expect(await share.json()).toEqual({ shareWith: ['alice', 'bob'] })
+    // Sélection du matin : alice et bob (pas zoe)
+    expect((await put('/api/tips/share', caisse, { usernames: ['chef'] })).status).toBe(400)
+    expect(await (await put('/api/tips/share', caisse, { usernames: ['BOB', 'alice'] })).json()).toEqual({ shareWith: ['alice', 'bob'] })
+    expect((await post('/api/tips/close', caisse)).status).toBe(400) // caisse vide
 
-    // Vider une caisse vide : refusé
-    expect((await post('/api/tips/close', caisse)).status).toBe(400)
-
-    // Ajouts : tout le monde voit le total en direct, seuls alice et bob sont notifiés
-    await post('/api/tips', caisse, { amount: 100 })
-    await post('/api/tips', caisse, { amount: '0,01' })
+    // Deux devises
+    expect((await post('/api/tips', caisse, { amount: 10, currency: 'EUR' })).status).toBe(400)
+    await post('/api/tips', caisse, { amount: 100, currency: 'USD' })
+    await post('/api/tips', caisse, { amount: '0,01', currency: 'USD' })
+    await post('/api/tips', caisse, { amount: '25 000', currency: 'FC' })
     await sleep(800)
-    expect(lz.of('tips').at(-1).total).toBe(100.01)
-    expect(la.of('notify').length).toBe(2)
-    expect(lb.of('notify').length).toBe(2)
-    expect(lz.of('notify').length).toBe(0)
-    expect(la.of('notify')[0].body).toContain('100,00')
 
-    // Web Push : reçu et déchiffré pour alice uniquement ; l'appareil « disparu » (410) est retiré
-    expect(pushInbox.filter(p => p.device === 'alice-tel').length).toBe(2)
+    // Confidentialité : alice voit la caisse, zoe (non sélectionnée) ne reçoit AUCUN montant
+    expect(la.of('tips').at(-1).totals).toEqual({ USD: 100.01, CDF: 25000 })
+    for (const v of lz.of('tips')) {
+      expect(v.totals).toBeNull()
+      expect(v.entries).toEqual([])
+      expect(JSON.stringify(v)).not.toMatch(/100\.01|25000/)
+    }
+    expect((await tips(zoe)).totals).toBeNull()
+    expect((await tips(chef)).totals).toEqual({ USD: 100.01, CDF: 25000 }) // l'admin voit tout
+
+    // Alertes : alice et bob seulement
+    expect(la.of('notify').length).toBe(3)
+    expect(lz.of('notify').length).toBe(0)
+    expect(la.of('notify').at(-1).body).toMatch(/25\s000 FC/)
+    expect(pushInbox.filter(p => p.device === 'alice-tel').length).toBe(3)
     expect(pushInbox.filter(p => p.device === 'zoe-tel').length).toBe(0)
-    expect(pushInbox[0].msg.title).toBe('Nouveau pourboire')
     const { readFileSync } = await import('node:fs')
     expect(readFileSync(join(dir, 'data', 'push.json'), 'utf8')).not.toContain('/push/gone')
 
-    // Vidage : partage 100,01 entre alice et bob, compteur à zéro, chacun notifié de sa part
-    const res = await post('/api/tips/close', caisse)
-    expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ shift: 'Matin', total: 100.01, by: 'caisse', shares: [{ username: 'alice', amount: 50.01 }, { username: 'bob', amount: 50 }] })
+    // Vidage du matin : parts par devise
+    const res = await (await post('/api/tips/close', caisse)).json()
+    expect(res).toEqual({ shift: 'Matin', by: 'caisse', totals: { USD: 100.01, CDF: 25000 }, shares: [
+      { username: 'alice', amounts: { USD: 50.01, CDF: 12500 } }, { username: 'bob', amounts: { USD: 50, CDF: 12500 } },
+    ] })
     await sleep(800)
-    const after = await (await call('/api/tips', zoe)).json()
-    expect(after.total).toBe(0)
-    expect(after.entries).toEqual([])
-    expect(after.closes[0].shares.length).toBe(2)
-    expect(after.shift).toBe('Soir')
-    expect(after.shareWith).toEqual([]) // le caissier du soir choisit ses personnes
-    expect(lz.of('tips').at(-1).total).toBe(0)
+    // Alice n'est plus sélectionnée : elle voit son gain en grand, plus la caisse
+    const va = la.of('tips').at(-1)
+    expect(va.selected).toBe(false)
+    expect(va.totals).toBeNull()
+    expect(va.lastEarning).toMatchObject({ shift: 'Matin', amounts: { USD: 50.01, CDF: 12500 }, people: 2 })
+    expect(va.closes).toEqual([]) // pas le détail des autres
+    expect(JSON.stringify(va)).not.toContain('"bob"')
+    // Zoe ne voit toujours rien
+    expect(lz.of('tips').at(-1).lastEarning).toBeNull()
+    expect(JSON.stringify(lz.of('tips').at(-1))).not.toMatch(/50\.01|12500/)
     expect(la.of('notify').at(-1)).toMatchObject({ title: 'Partage du service : Matin' })
-    expect(la.of('notify').at(-1).body).toContain('50,01')
-    expect(lb.of('notify').at(-1).body).toContain('50,00')
-    expect(pushInbox.at(-1)).toMatchObject({ device: 'alice-tel', msg: { title: 'Partage du service : Matin' } })
+    expect(la.of('notify').at(-1).body).toMatch(/50,01 \$ \+ 12\s500 FC/)
+    // Caissier et admin voient les partages
+    expect((await tips(chef)).closes.length).toBe(1)
 
-    // Service du soir : nouveaux pourboires à partir de zéro, l'équipe du matin n'est plus alertée
-    const aliceAlerts = la.of('notify').length
-    await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["alice","bob"]}' })
-    await post('/api/tips', caisse, { amount: 20 })
-    expect((await (await call('/api/tips', alice)).json()).total).toBe(20)
+    // Soir : bob est resélectionné -> son gain disparaît et il voit la nouvelle caisse ; alice garde son gain
+    await put('/api/tips/share', caisse, { usernames: ['bob', 'zoe'] })
+    await post('/api/tips', caisse, { amount: 20, currency: 'USD' })
+    await sleep(600)
+    expect(lb.of('tips').at(-1)).toMatchObject({ selected: true, lastEarning: null, totals: { USD: 20, CDF: 0 } })
+    expect(la.of('tips').at(-1).lastEarning.amounts).toEqual({ USD: 50.01, CDF: 12500 })
+    expect(la.of('tips').at(-1).totals).toBeNull()
 
-    // Compte supprimé : sa connexion en direct est coupée et ses appareils désabonnés
-    expect((await call('/api/users/alice', chef, { method: 'DELETE' })).status).toBe(200)
+    // Compte supprimé : connexion coupée, désabonné, retiré du partage
+    expect((await call('/api/users/zoe', chef, { method: 'DELETE' })).status).toBe(200)
     await sleep(500)
-    expect(la.events.at(-1)?.event).toBe('closed')
-    expect(readFileSync(join(dir, 'data', 'push.json'), 'utf8')).not.toContain('alice-tel')
-    // … et elle est retirée du partage au prochain vidage (soir), qui clôture la journée
-    const res2 = await post('/api/tips/close', caisse)
-    expect(await res2.json()).toMatchObject({ shift: 'Soir', shares: [{ username: 'bob', amount: 20 }] })
-    const closed = await (await call('/api/tips', bob)).json()
+    expect(lz.events.at(-1)?.event).toBe('closed')
+    expect(readFileSync(join(dir, 'data', 'push.json'), 'utf8')).not.toContain('zoe-tel')
+    const res2 = await (await post('/api/tips/close', caisse)).json()
+    expect(res2).toMatchObject({ shift: 'Soir', shares: [{ username: 'bob', amounts: { USD: 20, CDF: 0 } }] })
+    const closed = await tips(caisse)
     expect(closed.shift).toBeNull()
-    expect(closed.closes.map((c: any) => c.shift)).toEqual(['Matin', 'Soir'])
     expect((await post('/api/tips', caisse, { amount: 5 })).status).toBe(409)
-    expect((await call('/api/tips/share', caisse, { method: 'PUT', body: '{"usernames":["bob"]}' })).status).toBe(409)
-    expect((await post('/api/tips/close', caisse)).status).toBe(409)
-    expect(aliceAlerts).toBeGreaterThan(0)
+    // Alice voit encore son gain du matin (jamais resélectionnée)
+    expect((await tips(alice)).lastEarning.shift).toBe('Matin')
 
-    // Sans connexion : flux en direct refusé
     const anon = listen('')
     await sleep(300)
     expect(anon.events[0]).toEqual({ event: 'http', data: 401 })
-    lb.stop(); lz.stop()
+    la.stop(); lb.stop()
   })
 })

@@ -1,4 +1,4 @@
-export interface Me { username: string, role: 'admin' | 'caissier' | 'lecteur', mustChangePassword: boolean }
+export interface Me { username: string, name: string, role: 'admin' | 'caissier' | 'lecteur', mustChangePassword: boolean }
 
 export const useMe = () => useState<Me | null>('me', () => null)
 

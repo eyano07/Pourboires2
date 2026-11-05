@@ -1,4 +1,4 @@
-// Usage : npm run user:add -- <nom> <mot_de_passe> <admin|caissier|lecteur> [--temp]
+// Usage : npm run user:add -- <identifiant> <mot_de_passe> <admin|caissier|lecteur> [--temp] [--name "Noms complets"]
 // --temp : l'utilisateur devra changer ce mot de passe à sa première connexion.
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
@@ -6,6 +6,9 @@ import { scryptSync, randomBytes } from 'node:crypto'
 
 const args = process.argv.slice(2)
 const temp = args.includes('--temp')
+let fullName = null
+const ni = args.indexOf('--name')
+if (ni >= 0) { fullName = String(args[ni + 1] ?? '').replace(/\s+/g, ' ').trim(); args.splice(ni, 2) }
 const [username, password, role] = args.filter(a => a !== '--temp')
 if (!username || !password || !['admin', 'caissier', 'lecteur'].includes(role)) {
   console.error('Usage : npm run user:add -- <nom> <mot_de_passe> <admin|caissier|lecteur> [--temp]')
@@ -30,7 +33,7 @@ if (raw !== null) {
 users = users.filter(u => u.username.toLowerCase() !== username.toLowerCase())
 const salt = randomBytes(16)
 const hash = scryptSync(password, salt, 64)
-users.push({ username, role, passwordHash: `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`, mustChangePassword: temp })
+users.push({ username, ...(fullName ? { name: fullName } : {}), role, passwordHash: `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`, mustChangePassword: temp })
 await fs.mkdir(dir, { recursive: true, mode: 0o700 })
 const tmp = `${file}.${process.pid}.tmp`
 await fs.writeFile(tmp, JSON.stringify(users, null, 2), { encoding: 'utf8', mode: 0o600 })

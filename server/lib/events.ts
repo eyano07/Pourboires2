@@ -4,6 +4,7 @@
  */
 export interface LiveClient {
   username: string
+  role: 'admin' | 'caissier' | 'lecteur'
   send: (event: string, data: unknown) => void
   close: () => void
 }
@@ -25,9 +26,14 @@ export function onlineUsers(): string[] {
 
 /** Envoie un événement à tous, ou seulement aux utilisateurs indiqués. */
 export function broadcast(event: string, data: unknown, only?: string[]) {
+  broadcastEach(event, () => data, only)
+}
+
+/** Envoie à chaque connexion un contenu calculé pour elle (ex. vue filtrée selon le rôle). */
+export function broadcastEach(event: string, build: (c: LiveClient) => unknown, only?: string[]) {
   const allow = only ? new Set(only.map(u => u.toLowerCase())) : null
   for (const c of clients) {
-    if (!allow || allow.has(c.username.toLowerCase())) c.send(event, data)
+    if (!allow || allow.has(c.username.toLowerCase())) c.send(event, build(c))
   }
 }
 

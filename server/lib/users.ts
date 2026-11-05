@@ -17,8 +17,34 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
   return run
 }
 
-export interface PublicUser { username: string, role: Role, mustChangePassword: boolean }
-const pub = (u: User): PublicUser => ({ username: u.username, role: u.role, mustChangePassword: !!u.mustChangePassword })
+export interface PublicUser { username: string, name: string, role: Role, mustChangePassword: boolean }
+const pub = (u: User): PublicUser => ({ username: u.username, name: u.name || u.username, role: u.role, mustChangePassword: !!u.mustChangePassword })
+
+/** Noms complets : 2 à 60 caractères, espaces multiples réduits. */
+export function validateName(value: unknown): string {
+  const name = String(value ?? '').replace(/\s+/g, ' ').trim()
+  if (name.length < 2 || name.length > 60 || /[<>]/.test(name)) throw new UserError('invalid', 'Noms : 2 à 60 caractères')
+  return name
+}
+
+/** Correspondance identifiant -> noms complets (pour l'affichage). */
+export async function nameMap(dir = dataDir()): Promise<Record<string, string>> {
+  const map: Record<string, string> = {}
+  for (const u of await readUsers(dir)) map[u.username.toLowerCase()] = u.name || u.username
+  return map
+}
+
+export function renameUser(username: string, name: unknown, dir = dataDir()): Promise<PublicUser> {
+  return serial(async () => {
+    const clean = validateName(name)
+    const users = await readUsers(dir)
+    const user = users.find(u => same(u.username, username))
+    if (!user) throw new UserError('not_found', 'Utilisateur introuvable')
+    user.name = clean
+    await saveUsers(dir, users)
+    return pub(user)
+  })
+}
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
@@ -32,17 +58,18 @@ export async function listUsers(dir = dataDir()): Promise<PublicUser[]> {
 
 /** Crée un compte avec un mot de passe par défaut : l'utilisateur devra le changer à sa première connexion. */
 export function createUser(
-  input: { username: unknown, role: unknown, password: unknown }, dir = dataDir(),
+  input: { username: unknown, role: unknown, password: unknown, name: unknown }, dir = dataDir(),
 ): Promise<PublicUser> {
   return serial(async () => {
     const username = String(input.username ?? '').trim()
     const password = String(input.password ?? '')
-    if (!USERNAME_RE.test(username)) throw new UserError('invalid', 'Nom invalide (2 à 30 caractères : lettres, chiffres, . _ -)')
+    const name = validateName(input.name)
+    if (!USERNAME_RE.test(username)) throw new UserError('invalid', 'Identifiant invalide (2 à 30 caractères : lettres, chiffres, . _ -)')
     if (!ROLES.includes(input.role as Role)) throw new UserError('invalid', 'Rôle invalide')
     if (password.length < MIN_PASSWORD) throw new UserError('invalid', `Mot de passe par défaut : ${MIN_PASSWORD} caractères minimum`)
     const users = await readUsers(dir)
     if (users.some(u => same(u.username, username))) throw new UserError('exists', 'Ce nom d’utilisateur existe déjà')
-    const user: User = { username, role: input.role as Role, passwordHash: hashPassword(password), mustChangePassword: true }
+    const user: User = { username, name, role: input.role as Role, passwordHash: hashPassword(password), mustChangePassword: true }
     users.push(user)
     await saveUsers(dir, users)
     return pub(user)

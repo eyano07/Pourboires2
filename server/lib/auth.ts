@@ -8,6 +8,8 @@ export interface User {
   username: string
   role: Role
   passwordHash: string
+  /** Noms complets de la personne (affichés dans l'application). */
+  name?: string
   /** Vrai tant que l'utilisateur n'a pas remplacé son mot de passe par défaut. */
   mustChangePassword?: boolean
 }

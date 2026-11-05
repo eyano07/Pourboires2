@@ -43,3 +43,9 @@ Toutes concernent des outils de construction (glob, minimatch, archiver…) abse
 - Connexions en direct : limitées à 500, coupées si le compte est supprimé ou le mot de passe changé, aucune requête pendant l'inactivité (mesuré dans Chrome).
 - Web Push testé de bout en bout avec un faux service de push HTTPS qui déchiffre les messages : seules les personnes cochées reçoivent ; appareils disparus (410) retirés ; abonnements en HTTPS uniquement ; fichiers en 600.
 - Non testé : réception réelle sur un téléphone (impossible sans HTTPS ni accès aux services de push depuis l'environnement de test).
+
+## Ajout du 5 novembre (devises, confidentialité, noms) — vérifié
+- Confidentialité appliquée **par le serveur** : un agent non sélectionné ne reçoit aucun montant, ni par l'API ni par la connexion en direct (testé : aucun chiffre de la caisse dans ses données) ; un agent ne voit que sa propre part, jamais celles des autres.
+- Deux devises tenues et partagées séparément, en unités entières (centimes de dollar, francs entiers) : aucune unité perdue (testé de 1 à 13 personnes).
+- Anciens fichiers repris automatiquement (saisies sans devise = dollars, comptes sans noms = identifiant).
+- Vérifié sur écran de téléphone (360 px) : aucun débordement horizontal ; aucune personne cachée sous la barre « Valider ».

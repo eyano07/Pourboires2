@@ -4,8 +4,28 @@ export default defineNuxtConfig({
   css: ['@mdi/font/css/materialdesignicons.css'],
   vuetify: {
     vuetifyOptions: {
-      theme: { defaultTheme: 'light' },
+      theme: {
+        defaultTheme: 'biso',
+        themes: {
+          biso: {
+            dark: false,
+            colors: {
+              primary: '#0f766e', secondary: '#f59e0b', error: '#dc2626', success: '#16a34a',
+              warning: '#d97706', info: '#0284c7', background: '#f3f5f7', surface: '#ffffff',
+            },
+          },
+        },
+      },
       icons: { defaultSet: 'mdi' },
+      defaults: {
+        VCard: { rounded: 'xl', elevation: 0, border: true },
+        VBtn: { rounded: 'lg', class: 'text-none', style: 'letter-spacing: 0' },
+        VTextField: { variant: 'outlined', rounded: 'lg' },
+        VSelect: { variant: 'outlined', rounded: 'lg' },
+        VCombobox: { variant: 'outlined', rounded: 'lg' },
+        VAlert: { rounded: 'lg' },
+        VChip: { rounded: 'pill' },
+      },
     },
   },
   app: {
@@ -14,7 +34,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'fr' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'theme-color', content: '#1867c0' },
+        { name: 'theme-color', content: '#0f766e' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
       ],
       link: [

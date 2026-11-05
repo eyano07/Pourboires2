@@ -6,5 +6,5 @@ import { asHttp } from '../../lib/userRoute'
 export default defineEventHandler(async (event) => {
   await requireUser(event, { roles: ['admin'] })
   const body = await readBody(event)
-  return await asHttp(() => createUser({ username: body?.username, role: body?.role, password: body?.password }))
+  return await asHttp(() => createUser({ username: body?.username, name: body?.name, role: body?.role, password: body?.password }))
 })

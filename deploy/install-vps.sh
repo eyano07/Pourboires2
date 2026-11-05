@@ -95,15 +95,17 @@ fi
 
 # Premier administrateur si aucun compte n'existe encore
 if [ ! -s data/users.json ]; then
-  ADMIN_USER="${ADMIN_USER:-}"; ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+  ADMIN_USER="${ADMIN_USER:-}"; ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"; ADMIN_NAME="${ADMIN_NAME:-}"
   if [ -z "$ADMIN_USER" ] && [ -t 0 ]; then
-    read -rp "Nom du premier administrateur [admin] : " ADMIN_USER; ADMIN_USER="${ADMIN_USER:-admin}"
+    read -rp "Noms de l'administrateur (ex. Jean Mukendi) : " ADMIN_NAME
+    read -rp "Identifiant de connexion de l'administrateur [admin] : " ADMIN_USER; ADMIN_USER="${ADMIN_USER:-admin}"
     while [ "${#ADMIN_PASSWORD}" -lt 6 ]; do
       read -rsp "Mot de passe (6 caractères minimum) : " ADMIN_PASSWORD; echo
     done
   fi
   if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASSWORD" ]; then
-    ./control.sh user-add "$ADMIN_USER" "$ADMIN_PASSWORD" admin
+    if [ -n "$ADMIN_NAME" ]; then ./control.sh user-add "$ADMIN_USER" "$ADMIN_PASSWORD" admin --name "$ADMIN_NAME"
+    else ./control.sh user-add "$ADMIN_USER" "$ADMIN_PASSWORD" admin; fi
   else
     echo "   Aucun compte créé : lancez ./control.sh user-add <nom> <mot_de_passe> admin"
   fi
