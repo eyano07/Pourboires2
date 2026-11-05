@@ -1,0 +1,9 @@
+node_modules
+.nuxt
+.output
+.data
+dist
+.env
+# Données réelles : ne jamais publier les comptes ni les pourboires
+data/users.json
+data/tips.json

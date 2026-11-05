@@ -1,0 +1,23 @@
+{
+  "name": "pourboires-chez-biso",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "start": "node .output/server/index.mjs",
+    "test": "vitest run",
+    "user:add": "node scripts/add-user.mjs"
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "nuxt": "^3.21.11",
+    "vue": "^3.5.45",
+    "vue-router": "^4.6.4",
+    "vuetify": "^4.3.2",
+    "vuetify-nuxt-module": "^1.0.0-rc.6"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
+  }
+}

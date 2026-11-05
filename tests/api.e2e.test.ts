@@ -1,0 +1,94 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+// Nécessite `npm run build` au préalable (.output/server/index.mjs).
+const server = join(process.cwd(), '.output/server/index.mjs')
+const PORT = 3999
+const base = `http://127.0.0.1:${PORT}`
+let proc: ChildProcess
+let dir: string
+
+async function login(username: string, password: string) {
+  const r = await fetch(`${base}/api/auth/login`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }),
+  })
+  return { r, cookie: r.headers.get('set-cookie')?.split(';')[0] ?? '' }
+}
+const call = (path: string, cookie = '', init: RequestInit = {}) =>
+  fetch(`${base}${path}`, { ...init, headers: { 'content-type': 'application/json', cookie, ...(init.headers ?? {}) } })
+
+describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
+  beforeAll(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'biso-e2e-'))
+    const env = { ...process.env, DATA_DIR: dir, SESSION_SECRET: 'test-secret', PORT: String(PORT), HOST: '127.0.0.1' }
+    execFileSync('node', ['scripts/add-user.mjs', 'caisse', 'motdepasse1', 'caissier'], { env })
+    execFileSync('node', ['scripts/add-user.mjs', 'patron', 'motdepasse2', 'lecteur'], { env })
+    proc = spawn('node', [server], { env, stdio: 'ignore' })
+    for (let i = 0; i < 50; i++) {
+      try { await fetch(`${base}/api/auth/me`); return } catch { await new Promise(r => setTimeout(r, 200)) }
+    }
+    throw new Error('serveur non démarré')
+  })
+  afterAll(() => { proc?.kill() })
+
+  it('refuse sans connexion', async () => {
+    expect((await call('/api/tips')).status).toBe(401)
+    expect((await call('/api/tips', '', { method: 'POST', body: '{"amount":5}' })).status).toBe(401)
+  })
+  it('refuse de mauvais identifiants', async () => {
+    expect((await login('caisse', 'faux')).r.status).toBe(401)
+  })
+  it('stocke les mots de passe hachés dans users.json', () => {
+    const raw = readFileSync(join(dir, 'users.json'), 'utf8')
+    expect(raw).not.toContain('motdepasse1')
+    expect(raw).toContain('scrypt$')
+  })
+
+  it('scénario complet caissier / lecteur', async () => {
+    const caisse = await login('caisse', 'motdepasse1')
+    const patron = await login('patron', 'motdepasse2')
+    expect(caisse.r.status).toBe(200)
+
+    // Le caissier ajoute des pourboires
+    for (const a of [100, '50,5']) {
+      const r = await call('/api/tips', caisse.cookie, { method: 'POST', body: JSON.stringify({ amount: a }) })
+      expect(r.status).toBe(200)
+    }
+    expect((await call('/api/tips', caisse.cookie, { method: 'POST', body: '{"amount":-3}' })).status).toBe(400)
+    expect((await call('/api/tips', caisse.cookie, { method: 'POST', body: '{"amount":"abc"}' })).status).toBe(400)
+
+    // Le lecteur voit la caisse mais ne peut pas ajouter ni supprimer
+    const view = await (await call('/api/tips', patron.cookie)).json()
+    expect(view.total).toBe(150.5)
+    expect(view.entries.map((e: any) => e.username)).toEqual(['caisse', 'caisse'])
+    expect((await call('/api/tips', patron.cookie, { method: 'POST', body: '{"amount":10}' })).status).toBe(403)
+    expect((await call(`/api/tips/${view.entries[0].id}`, patron.cookie, { method: 'DELETE' })).status).toBe(403)
+
+    // Le caissier supprime une saisie
+    expect((await call(`/api/tips/${view.entries[0].id}`, caisse.cookie, { method: 'DELETE' })).status).toBe(200)
+    expect((await (await call('/api/tips', patron.cookie)).json()).total).toBe(50.5)
+
+    // Le fichier JSON contient bien nom + montant, et uniquement le jour courant
+    const file = JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8'))
+    expect(file.entries).toHaveLength(1)
+    expect(file.entries[0]).toMatchObject({ username: 'caisse', amount: 50.5 })
+  })
+
+  it('déconnexion et /me', async () => {
+    const { cookie } = await login('patron', 'motdepasse2')
+    expect(await (await call('/api/auth/me', cookie)).json()).toEqual({ username: 'patron', role: 'lecteur' })
+    const out = await call('/api/auth/logout', cookie, { method: 'POST' })
+    expect(out.status).toBe(200)
+  })
+
+  it('sert les pages (login et accueil redirigé)', async () => {
+    const login = await fetch(`${base}/login`)
+    expect(login.status).toBe(200)
+    expect(await login.text()).toContain('Pourboires chez Biso')
+    const home = await fetch(`${base}/`, { redirect: 'manual' })
+    expect([301, 302, 307, 308]).toContain(home.status)
+  })
+})
