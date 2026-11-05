@@ -50,3 +50,6 @@ cd ~/pourboires-biso
 ```
 
 Garanties : rien n'est écrit hors de `~/pourboires-biso`, aucun paquet ni service système ni pare-feu touché, arrêt uniquement via le fichier PID, `data/` et `.env` jamais écrasés, démarrage refusé si le port est déjà pris. Utilisez un port ≥ 1024 (8086, 8087…) ; ouvrez-le vous-même dans le pare-feu si nécessaire.
+
+### Installation directement sur le VPS (sans poste local)
+Copiez `deploy/install-vps.sh` sur le VPS puis lancez `bash install-vps.sh` (variables : `PORT`, `APP_DIR`, `ADMIN_USER`, `ADMIN_PASSWORD`). Le script demande un jeton GitHub en lecture (dépôt privé), télécharge, construit, génère `data/` et `.env`, crée le premier admin et démarre. Relancez-le pour mettre à jour.
