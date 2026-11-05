@@ -95,17 +95,17 @@ async function save() {
 .staff { display: grid; gap: 8px; }
 .staff__item {
   display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 10px 12px; border-radius: 16px; background: #fff; border: 1.5px solid rgba(0, 0, 0, .08);
+  padding: 10px 12px; border-radius: 16px; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); border: 1.5px solid rgba(var(--v-theme-on-surface), .12);
   transition: border-color .15s, background .15s; cursor: pointer;
   scroll-margin-bottom: 120px; /* jamais caché sous la barre « Valider » */
 }
-.staff__item--on { border-color: rgb(var(--v-theme-primary)); background: #ecfdf5; }
+.staff__item--on { border-color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); }
 .staff__text { flex: 1; min-width: 0; }
 .staff__name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.staff__meta { font-size: .78rem; color: rgba(0, 0, 0, .55); }
-.presence { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #cbd5e1; border: 2px solid #fff; }
+.staff__meta { font-size: .78rem; color: rgba(var(--v-theme-on-surface), .6); }
+.presence { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%; background: #94a3b8; border: 2px solid rgb(var(--v-theme-surface)); }
 .presence--on { background: #16a34a; }
-.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: #fff; border-top: 1px solid rgba(0, 0, 0, .08); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); border-top: 1px solid rgba(var(--v-theme-on-surface), .12); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
 .bottom-bar__inner { max-width: 640px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
 .bottom-bar__info { flex: 1; min-width: 0; }
 </style>

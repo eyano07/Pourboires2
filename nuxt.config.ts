@@ -10,8 +10,18 @@ export default defineNuxtConfig({
           biso: {
             dark: false,
             colors: {
-              primary: '#0f766e', secondary: '#f59e0b', error: '#dc2626', success: '#16a34a',
+              primary: '#1867c0', secondary: '#f59e0b', error: '#dc2626', success: '#16a34a',
               warning: '#d97706', info: '#0284c7', background: '#f3f5f7', surface: '#ffffff',
+              bar: '#1867c0', 'on-bar': '#ffffff',
+            },
+          },
+          // Mode nuit : fonds sombres, bleu plus clair pour rester lisible
+          bisoDark: {
+            dark: true,
+            colors: {
+              primary: '#2f81f7', secondary: '#fbbf24', error: '#ef4444', success: '#4ade80',
+              warning: '#fbbf24', info: '#38bdf8', background: '#0d1117', surface: '#161b22',
+              bar: '#161b22', 'on-bar': '#e6edf3',
             },
           },
         },
@@ -34,7 +44,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'fr' },
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'theme-color', content: '#0f766e' },
+        { name: 'theme-color', content: '#1867c0' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
       ],
       link: [
