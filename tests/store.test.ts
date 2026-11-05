@@ -78,11 +78,11 @@ describe('caisse', () => {
     await addTip('alice', 100, 'USD', dir, day1)
     expect(await readTips(dir, day2)).toEqual(EMPTY('2026-11-06'))
   })
-  it('supprime sa propre saisie, refuse celle d’un autre', async () => {
+  it('supprime une saisie (contrôle des droits fait par la route)', async () => {
     const e = await addTip('alice', 50, 'USD', dir, day1) as { id: string }
-    expect(await removeTip(e.id, 'bob', dir, day1)).toBe('forbidden')
-    expect(await removeTip('inconnu', 'alice', dir, day1)).toBe('not_found')
-    expect(await removeTip(e.id, 'alice', dir, day1)).toBe('ok')
+    expect(await removeTip('inconnu', dir, day1)).toBe('not_found')
+    expect(await removeTip(e.id, dir, day1)).toBe('ok')
+    expect((await readTips(dir, day1)).entries).toEqual([])
   })
   it('se remet d’un fichier corrompu', async () => {
     writeFileSync(join(dir, 'tips.json'), '{pas du json')

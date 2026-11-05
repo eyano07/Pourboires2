@@ -100,7 +100,7 @@
           </template>
           <v-list-item-title class="font-weight-bold">{{ money(e.amount, e.currency) }}</v-list-item-title>
           <v-list-item-subtitle>par {{ nameOf(e.username) }}</v-list-item-subtitle>
-          <template v-if="me?.role === 'caissier' && e.username === me.username" #append>
+          <template v-if="me?.role === 'admin'" #append>
             <v-btn icon="mdi-delete-outline" variant="text" color="error" aria-label="Supprimer" @click="toDelete = e" />
           </template>
         </v-list-item>

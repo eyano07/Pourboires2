@@ -3,11 +3,11 @@ import { requireUser } from '../../lib/session'
 import { removeTip } from '../../lib/store'
 import { publishTips } from '../../lib/live'
 
+/** Seul l'administrateur peut supprimer un pourboire enregistré (le caissier ne le peut pas). */
 export default defineEventHandler(async (event) => {
-  const me = await requireUser(event, { roles: ['caissier'] })
-  const result = await removeTip(getRouterParam(event, 'id') ?? '', me.username)
+  await requireUser(event, { roles: ['admin'] })
+  const result = await removeTip(getRouterParam(event, 'id') ?? '')
   if (result === 'not_found') throw createError({ statusCode: 404, statusMessage: 'Saisie introuvable' })
-  if (result === 'forbidden') throw createError({ statusCode: 403, statusMessage: 'Ce n’est pas votre saisie' })
   await publishTips()
   return { ok: true }
 })

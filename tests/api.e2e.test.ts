@@ -74,8 +74,11 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     expect((await call('/api/tips', patron.cookie, { method: 'POST', body: '{"amount":10}' })).status).toBe(403)
     expect((await call(`/api/tips/${view.entries[0].id}`, patron.cookie, { method: 'DELETE' })).status).toBe(403)
 
-    // Le caissier supprime une saisie
-    expect((await call(`/api/tips/${view.entries[0].id}`, caisse.cookie, { method: 'DELETE' })).status).toBe(200)
+    // Le caissier ne peut PAS supprimer une saisie ; seul l'administrateur le peut
+    expect((await call(`/api/tips/${view.entries[0].id}`, caisse.cookie, { method: 'DELETE' })).status).toBe(403)
+    const chef = await login('chef', 'adminpass1')
+    expect((await call(`/api/tips/${view.entries[0].id}`, chef.cookie, { method: 'DELETE' })).status).toBe(200)
+    expect((await call('/api/tips/inconnu', chef.cookie, { method: 'DELETE' })).status).toBe(404)
     expect((await (await call('/api/tips', patron.cookie)).json()).totals.USD).toBe(50.5)
 
     // Le fichier JSON contient bien nom + montant, et uniquement le jour courant

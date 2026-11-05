@@ -150,15 +150,15 @@ export function addTip(
 }
 
 /** Supprime une saisie appartenant à `username`. Retourne 'ok', 'not_found' ou 'forbidden'. */
+/** Supprime une saisie de la caisse en cours (réservé à l'administrateur, contrôlé par la route). */
 export function removeTip(
-  id: string, username: string,
+  id: string,
   dir: string = dataDir(), now: Date = new Date(),
-): Promise<'ok' | 'not_found' | 'forbidden'> {
+): Promise<'ok' | 'not_found'> {
   return serial(async () => {
     const data = await load(dir, now)
     const entry = data.entries.find(e => e.id === id)
     if (!entry) return 'not_found'
-    if (entry.username !== username) return 'forbidden'
     data.entries = data.entries.filter(e => e.id !== id)
     await writeAtomic(join(dir, 'tips.json'), data)
     return 'ok'
