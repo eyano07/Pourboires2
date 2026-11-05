@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Installe / met à jour « Pourboires chez Biso » directement sur le VPS, dans UN SEUL dossier.
+# Télécharge le dépôt, construit l'application, génère data/ et .env, démarre le serveur.
+# Rien n'est écrit en dehors du dossier de l'application (défaut : ~/pourboires-biso).
+# Variables facultatives : PORT (8087), APP_DIR, REPO, BRANCH, GITHUB_TOKEN, ADMIN_USER, ADMIN_PASSWORD
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-$HOME/pourboires-biso}"
+PORT="${PORT:-8087}"
+REPO="${REPO:-https://github.com/eyano07/Pourboires_chez_biso.git}"
+BRANCH="${BRANCH:-main}"
+
+die() { echo "ERREUR : $*" >&2; exit 1; }
+
+# --- Garde-fous : on ne travaille que dans un sous-dossier du dossier personnel ---
+case "$APP_DIR" in "$HOME"/?*) ;; *) die "APP_DIR doit être un sous-dossier de $HOME (reçu : $APP_DIR)";; esac
+case "$APP_DIR" in *..*) die "APP_DIR ne doit pas contenir « .. »";; esac
+[[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "PORT doit être entre 1024 et 65535 (ex. 8087)"
+
+# --- Prérequis (rien n'est installé automatiquement) ---
+command -v git  >/dev/null || die "git est absent du serveur."
+command -v npm  >/dev/null || die "npm est absent du serveur."
+command -v node >/dev/null || die "Node.js est absent du serveur (version 20 minimum)."
+[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ] || die "Node.js 20 minimum requis (trouvé : $(node -v))."
+
+mkdir -p "$APP_DIR/data"
+cd "$APP_DIR"
+
+# --- Port : refuser s'il est pris par un autre programme (hors notre propre appli) ---
+if ! { [ -x ./control.sh ] && ./control.sh status >/dev/null 2>&1; }; then
+  if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+    die "le port $PORT est déjà utilisé par un autre programme. Relancez avec un autre port : PORT=8088 bash install.sh"
+  fi
+fi
+
+# --- Jeton GitHub (dépôt privé) : demandé sans affichage, jamais enregistré ---
+if [[ "$REPO" == https://github.com/* ]] && [ -z "${GITHUB_TOKEN:-}" ]; then
+  [ -t 0 ] || die "dépôt privé : définissez GITHUB_TOKEN ou lancez le script dans un terminal interactif."
+  read -rsp "Jeton GitHub (accès en lecture au dépôt) : " GITHUB_TOKEN; echo
+fi
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  # Passé par l'environnement (invisible dans « ps ») et non écrit dans .git/config.
+  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
+  export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+fi
+
+# --- 1. Téléchargement ---
+echo "1/4 Téléchargement du dépôt…"
+rm -rf "$APP_DIR/src"
+git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$APP_DIR/src" || die "téléchargement impossible (jeton invalide ou sans accès au dépôt ?)"
+unset GITHUB_TOKEN GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+
+# --- 2. Construction ---
+echo "2/4 Installation des dépendances et construction (quelques minutes)…"
+( cd "$APP_DIR/src" && npm ci --no-audit --no-fund --loglevel=error && npm run build >/dev/null ) || die "la construction a échoué."
+
+# --- 3. Mise en place ---
+echo "3/4 Mise en place…"
+[ -x ./control.sh ] && ./control.sh stop || true
+rm -rf ./.output ./scripts
+mv src/.output ./.output
+mv src/scripts ./scripts
+cp src/deploy/control.sh ./control.sh && chmod +x ./control.sh
+rm -rf ./src
+
+if [ ! -f .env ]; then
+  ( umask 077
+    printf 'SESSION_SECRET=%s\nPORT=%s\n' "$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 48)" "$PORT" > .env )
+  echo "   .env généré (secret de session aléatoire, port $PORT)."
+else
+  if grep -q '^PORT=' .env; then sed -i "s/^PORT=.*/PORT=$PORT/" .env; else echo "PORT=$PORT" >> .env; fi
+  echo "   .env existant conservé (port $PORT)."
+fi
+
+# Premier administrateur si aucun compte n'existe encore
+if [ ! -s data/users.json ]; then
+  ADMIN_USER="${ADMIN_USER:-}"; ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+  if [ -z "$ADMIN_USER" ] && [ -t 0 ]; then
+    read -rp "Nom du premier administrateur [admin] : " ADMIN_USER; ADMIN_USER="${ADMIN_USER:-admin}"
+    while [ "${#ADMIN_PASSWORD}" -lt 6 ]; do
+      read -rsp "Mot de passe (6 caractères minimum) : " ADMIN_PASSWORD; echo
+    done
+  fi
+  if [ -n "$ADMIN_USER" ] && [ -n "$ADMIN_PASSWORD" ]; then
+    ./control.sh user-add "$ADMIN_USER" "$ADMIN_PASSWORD" admin
+  else
+    echo "   Aucun compte créé : lancez ./control.sh user-add <nom> <mot_de_passe> admin"
+  fi
+fi
+
+# --- 4. Démarrage ---
+echo "4/4 Démarrage…"
+./control.sh start
+echo
+echo "Terminé. Application dans $APP_DIR, port $PORT : http://<adresse-du-serveur>:$PORT"
+echo "Commandes : cd $APP_DIR && ./control.sh status|stop|start|restart"
+echo "Mise à jour : relancez ce même script (data/ et .env sont conservés)."
