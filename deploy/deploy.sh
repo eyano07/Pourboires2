@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Déploie l'application sur un VPS, dans UN SEUL dossier : ~/pourboires-biso
+# Déploie l'application sur un VPS, dans UN SEUL dossier : ~/pourboires
 # À lancer depuis votre ordinateur (le mot de passe SSH est demandé par ssh, dans votre terminal).
 # Usage : deploy/deploy.sh <utilisateur@serveur> [port=8087]
 #
 # Garanties :
-#  - tout est écrit dans ~/pourboires-biso (rien d'autre n'est créé, modifié ou supprimé) ;
+#  - tout est écrit dans ~/pourboires (rien d'autre n'est créé, modifié ou supprimé) ;
 #  - aucun paquet installé, aucun service système, aucun pare-feu touché ;
 #  - l'arrêt de l'application se fait uniquement via son fichier PID (jamais « pkill ») ;
 #  - data/ (comptes et pourboires) et .env ne sont jamais écrasés.
@@ -12,7 +12,7 @@ set -euo pipefail
 
 TARGET="${1:-}"
 PORT="${2:-8087}"
-APP_DIR="pourboires-biso"   # relatif au dossier personnel (HOME) de l'utilisateur SSH
+APP_DIR="pourboires"   # relatif au dossier personnel (HOME) de l'utilisateur SSH
 [ -n "$TARGET" ] || { echo "Usage : $0 <utilisateur@serveur> [port]" >&2; exit 1; }
 [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || {
   echo "Port invalide : utilisez un port entre 1024 et 65535 (les ports < 1024, comme 86 ou 87, exigent root ; essayez 8086 ou 8087)." >&2; exit 1; }

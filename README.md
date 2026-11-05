@@ -33,7 +33,7 @@ npm run build && npm test
 ```
 Les tests de bout en bout démarrent le serveur construit ; sans build ils sont ignorés.
 
-## Déploiement sur un VPS (dossier unique `~/pourboires-biso`)
+## Déploiement sur un VPS (dossier unique `~/pourboires`)
 
 Depuis votre ordinateur (Node 20+ requis aussi sur le VPS) :
 
@@ -41,15 +41,15 @@ Depuis votre ordinateur (Node 20+ requis aussi sur le VPS) :
 deploy/deploy.sh utilisateur@adresse-du-vps 8087
 ```
 
-ssh demande le mot de passe dans votre terminal (une seule fois). Le script construit l'application, envoie uniquement `.output`, `scripts/` et `control.sh` dans `~/pourboires-biso`, génère `.env` (secret de session + port) et démarre l'application. Sur le VPS :
+ssh demande le mot de passe dans votre terminal (une seule fois). Le script construit l'application, envoie uniquement `.output`, `scripts/` et `control.sh` dans `~/pourboires`, génère `.env` (secret de session + port) et démarre l'application. Sur le VPS :
 
 ```bash
-cd ~/pourboires-biso
+cd ~/pourboires
 ./control.sh user-add chef <mot_de_passe> admin   # premier administrateur
 ./control.sh status | stop | start | restart
 ```
 
-Garanties : rien n'est écrit hors de `~/pourboires-biso`, aucun paquet ni service système ni pare-feu touché, arrêt uniquement via le fichier PID, `data/` et `.env` jamais écrasés, démarrage refusé si le port est déjà pris. Utilisez un port ≥ 1024 (8086, 8087…) ; ouvrez-le vous-même dans le pare-feu si nécessaire.
+Garanties : rien n'est écrit hors de `~/pourboires`, aucun paquet ni service système ni pare-feu touché, arrêt uniquement via le fichier PID, `data/` et `.env` jamais écrasés, démarrage refusé si le port est déjà pris. Utilisez un port ≥ 1024 (8086, 8087…) ; ouvrez-le vous-même dans le pare-feu si nécessaire.
 
 ### Installation directement sur le VPS (sans poste local)
 Copiez `deploy/install-vps.sh` sur le VPS puis lancez `bash install-vps.sh` (variables : `PORT`, `APP_DIR`, `ADMIN_USER`, `ADMIN_PASSWORD`). Le script demande un jeton GitHub en lecture (dépôt privé), télécharge, construit, génère `data/` et `.env`, crée le premier admin et démarre. Relancez-le pour mettre à jour.

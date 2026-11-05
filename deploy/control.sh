@@ -4,6 +4,7 @@
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR" || exit 1
+[ -x "$DIR/.node/bin/node" ] && export PATH="$DIR/.node/bin:$PATH"   # Node installé localement par install-vps.sh
 [ -f .env ] && set -a && . ./.env && set +a
 PORT="${PORT:-8087}"
 PIDFILE="$DIR/app.pid"

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Installe / met à jour « Pourboires chez Biso » directement sur le VPS, dans UN SEUL dossier.
-# Télécharge le dépôt, construit l'application, génère data/ et .env, démarre le serveur.
-# Rien n'est écrit en dehors du dossier de l'application (défaut : ~/pourboires-biso).
-# Variables facultatives : PORT (8087), APP_DIR, REPO, BRANCH, GITHUB_TOKEN, ADMIN_USER, ADMIN_PASSWORD
+# Installe / met à jour « Pourboires chez Biso » directement sur le VPS, dans UN SEUL dossier (~/pourboires).
+# Télécharge le code, installe Node.js localement s'il manque, construit, génère data/ et .env, démarre.
+# Rien n'est écrit en dehors du dossier de l'application ; aucun droit root nécessaire.
+# Variables facultatives : PORT (8087), APP_DIR, GITHUB_TOKEN, ADMIN_USER, ADMIN_PASSWORD
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-$HOME/pourboires-biso}"
+APP_DIR="${APP_DIR:-$HOME/pourboires}"
 PORT="${PORT:-8087}"
-REPO="${REPO:-https://github.com/eyano07/Pourboires_chez_biso.git}"
+REPO_SLUG="${REPO_SLUG:-eyano07/Pourboires_chez_biso}"
 BRANCH="${BRANCH:-main}"
+NODE_MAJOR=22
+TARBALL_URL="${TARBALL_URL:-https://api.github.com/repos/$REPO_SLUG/tarball/$BRANCH}"
 
 die() { echo "ERREUR : $*" >&2; exit 1; }
 
@@ -16,12 +18,8 @@ die() { echo "ERREUR : $*" >&2; exit 1; }
 case "$APP_DIR" in "$HOME"/?*) ;; *) die "APP_DIR doit être un sous-dossier de $HOME (reçu : $APP_DIR)";; esac
 case "$APP_DIR" in *..*) die "APP_DIR ne doit pas contenir « .. »";; esac
 [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1024 ] && [ "$PORT" -le 65535 ] || die "PORT doit être entre 1024 et 65535 (ex. 8087)"
-
-# --- Prérequis (rien n'est installé automatiquement) ---
-command -v git  >/dev/null || die "git est absent du serveur."
-command -v npm  >/dev/null || die "npm est absent du serveur."
-command -v node >/dev/null || die "Node.js est absent du serveur (version 20 minimum)."
-[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ] || die "Node.js 20 minimum requis (trouvé : $(node -v))."
+command -v curl >/dev/null || die "curl est absent du serveur (installez-le : apt install curl)."
+command -v tar  >/dev/null || die "tar est absent du serveur."
 
 mkdir -p "$APP_DIR/data"
 cd "$APP_DIR"
@@ -33,22 +31,48 @@ if ! { [ -x ./control.sh ] && ./control.sh status >/dev/null 2>&1; }; then
   fi
 fi
 
+# --- 0. Node.js : utilisé s'il est présent (>= 20), sinon installé DANS le dossier de l'application ---
+node_ok() { command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ]; }
+[ -x "$APP_DIR/.node/bin/node" ] && export PATH="$APP_DIR/.node/bin:$PATH"
+if node_ok && [ "${NODE_LOCAL:-0}" != "1" -o -x "$APP_DIR/.node/bin/node" ]; then
+  echo "0/4 Node.js $(node -v) présent."
+else
+  echo "0/4 Node.js absent ou trop ancien : installation locale dans $APP_DIR/.node (aucun droit root requis)…"
+  case "$(uname -m)" in x86_64|amd64) A=x64;; aarch64|arm64) A=arm64;; armv7l) A=armv7l;; *) die "architecture non supportée : $(uname -m)";; esac
+  [ "$(uname -s)" = "Linux" ] || die "installation locale de Node.js prévue pour Linux uniquement."
+  BASE="${NODE_DIST_URL:-https://nodejs.org/dist/latest-v$NODE_MAJOR.x}"
+  curl -fsSL "$BASE/SHASUMS256.txt" -o node.sums || die "impossible de joindre nodejs.org."
+  LINE="$(grep "node-v.*-linux-$A.tar.gz\$" node.sums | head -n1)" || true
+  [ -n "$LINE" ] || die "archive Node.js introuvable pour $A."
+  FILE="${LINE##* }"; SUM="${LINE%% *}"
+  curl -fsSL "$BASE/$FILE" -o node.tgz || die "téléchargement de Node.js impossible."
+  echo "$SUM  node.tgz" | sha256sum -c --status - || die "somme de contrôle de Node.js incorrecte."
+  rm -rf .node && mkdir .node && tar xzf node.tgz -C .node --strip-components=1
+  rm -f node.tgz node.sums
+  export PATH="$APP_DIR/.node/bin:$PATH"
+  node_ok || die "l'installation de Node.js a échoué."
+  echo "   Node.js $(node -v) installé dans $APP_DIR/.node"
+fi
+
 # --- Jeton GitHub (dépôt privé) : demandé sans affichage, jamais enregistré ---
-if [[ "$REPO" == https://github.com/* ]] && [ -z "${GITHUB_TOKEN:-}" ]; then
+if [[ "$TARBALL_URL" == https://api.github.com/* ]] && [ -z "${GITHUB_TOKEN:-}" ]; then
   [ -t 0 ] || die "dépôt privé : définissez GITHUB_TOKEN ou lancez le script dans un terminal interactif."
   read -rsp "Jeton GitHub (accès en lecture au dépôt) : " GITHUB_TOKEN; echo
 fi
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-  # Passé par l'environnement (invisible dans « ps ») et non écrit dans .git/config.
-  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
-  export GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')"
-fi
 
-# --- 1. Téléchargement ---
-echo "1/4 Téléchargement du dépôt…"
-rm -rf "$APP_DIR/src"
-git clone --quiet --depth 1 --branch "$BRANCH" "$REPO" "$APP_DIR/src" || die "téléchargement impossible (jeton invalide ou sans accès au dépôt ?)"
-unset GITHUB_TOKEN GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+# --- 1. Téléchargement du code ---
+echo "1/4 Téléchargement du code…"
+rm -rf "$APP_DIR/src" && mkdir "$APP_DIR/src"
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  # Le jeton passe par stdin (« curl -K - ») : invisible dans « ps », jamais écrit sur le disque.
+  printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$GITHUB_TOKEN" \
+    | curl -fsSL -K - "$TARBALL_URL" -o code.tgz || die "téléchargement impossible (jeton invalide ou sans accès au dépôt ?)"
+else
+  curl -fsSL "$TARBALL_URL" -o code.tgz || die "téléchargement impossible."
+fi
+unset GITHUB_TOKEN
+tar xzf code.tgz -C src --strip-components=1 && rm -f code.tgz
+[ -f src/package.json ] || die "archive du dépôt inattendue."
 
 # --- 2. Construction ---
 echo "2/4 Installation des dépendances et construction (quelques minutes)…"
