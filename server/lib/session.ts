@@ -1,6 +1,8 @@
 import type { H3Event } from 'h3'
 import { createError, getCookie } from 'h3'
-import { readToken, type Role, type Session } from './auth'
+import { readToken, type Role } from './auth'
+import { dataDir } from './store'
+import { findUser } from './users'
 
 export const COOKIE = 'biso_session'
 
@@ -13,13 +15,25 @@ export function sessionSecret(): string {
   return 'dev-secret-seulement-en-developpement'
 }
 
-export function currentSession(event: H3Event): Session | null {
-  return readToken(getCookie(event, COOKIE), sessionSecret())
-}
+export interface CurrentUser { username: string, role: Role, mustChangePassword: boolean }
 
-export function requireSession(event: H3Event, role?: Role): Session {
-  const s = currentSession(event)
-  if (!s) throw createError({ statusCode: 401, statusMessage: 'Non connecté' })
-  if (role && s.r !== role) throw createError({ statusCode: 403, statusMessage: 'Accès refusé' })
-  return s
+/**
+ * Utilisateur connecté, relu dans users.json : un compte supprimé ou dont le rôle a changé
+ * est pris en compte immédiatement.
+ */
+export async function requireUser(
+  event: H3Event,
+  opts: { roles?: Role[], allowTemporaryPassword?: boolean } = {},
+): Promise<CurrentUser> {
+  const s = readToken(getCookie(event, COOKIE), sessionSecret())
+  const user = s ? await findUser(s.u, dataDir()) : null
+  if (!user) throw createError({ statusCode: 401, statusMessage: 'Non connecté' })
+  const mustChangePassword = !!user.mustChangePassword
+  if (mustChangePassword && !opts.allowTemporaryPassword) {
+    throw createError({ statusCode: 403, statusMessage: 'Changement de mot de passe requis' })
+  }
+  if (opts.roles && !opts.roles.includes(user.role)) {
+    throw createError({ statusCode: 403, statusMessage: 'Accès refusé' })
+  }
+  return { username: user.username, role: user.role, mustChangePassword }
 }

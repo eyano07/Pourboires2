@@ -26,9 +26,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Identifiants incorrects' })
   }
   failures.delete(key)
-  setCookie(event, COOKIE, createToken(user, sessionSecret()), {
+  setCookie(event, COOKIE, createToken(user.username, sessionSecret()), {
     httpOnly: true, sameSite: 'lax', path: '/', maxAge: SESSION_TTL_MS / 1000,
     secure: process.env.COOKIE_SECURE === 'true',
   })
-  return { username: user.username, role: user.role }
+  return { username: user.username, role: user.role, mustChangePassword: !!user.mustChangePassword }
 })

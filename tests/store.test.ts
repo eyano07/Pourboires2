@@ -64,6 +64,19 @@ describe('store', () => {
     expect(await removeTip(e.id, 'alice', dir, day1)).toBe('ok')
     expect((await readTips(dir, day1)).entries).toHaveLength(0)
   })
+  it('le fichier du jour ne garde que l’utilisateur et le montant (plus un id technique)', async () => {
+    await addTip('alice', 100, dir, day1)
+    const raw = JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8'))
+    expect(Object.keys(raw)).toEqual(['date', 'entries'])
+    expect(Object.keys(raw.entries[0]).sort()).toEqual(['amount', 'id', 'username'])
+  })
+  it('nettoie les anciens champs (ex. time) d’un fichier existant', async () => {
+    writeFileSync(join(dir, 'tips.json'), JSON.stringify({
+      date: '2026-11-05', entries: [{ id: 'a', username: 'alice', amount: 5, time: '2026-11-05T09:00:00Z', extra: 1 }],
+    }))
+    const d = await readTips(dir, day1)
+    expect(d.entries).toEqual([{ id: 'a', username: 'alice', amount: 5 }])
+  })
   it('se remet d’un fichier corrompu', async () => {
     writeFileSync(join(dir, 'tips.json'), '{pas du json')
     expect((await readTips(dir, day1)).entries).toEqual([])

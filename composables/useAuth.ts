@@ -1,4 +1,4 @@
-export interface Me { username: string, role: 'caissier' | 'lecteur' }
+export interface Me { username: string, role: 'admin' | 'caissier' | 'lecteur', mustChangePassword: boolean }
 
 export const useMe = () => useState<Me | null>('me', () => null)
 
@@ -7,3 +7,5 @@ export async function fetchMe(): Promise<Me | null> {
     return await $fetch<Me>('/api/auth/me', { headers: useRequestHeaders(['cookie']) })
   } catch { return null }
 }
+
+export const roleLabel = (r: Me['role']) => ({ admin: 'Administrateur', caissier: 'Caissier', lecteur: 'Lecteur' })[r]

@@ -11,18 +11,21 @@ Application web simple pour enregistrer les pourboires du jour d'un restaurant e
 ## Point d'architecture à valider
 Un site 100 % statique (`nuxt generate`) ne peut pas écrire dans un fichier. Pour que les pourboires soient enregistrés dans un fichier JSON, il faut un petit serveur Node. On utilise donc les routes serveur intégrées de Nuxt (Nitro) : le front reste léger, et le serveur lit/écrit les fichiers JSON. Aucun service externe, aucune base de données.
 
-## Comptes (deux rôles)
+## Comptes (trois rôles)
+- `admin` : crée les utilisateurs avec un mot de passe par défaut, les réinitialise ou les supprime. Consulte la caisse sans pouvoir saisir.
 - `caissier` : peut ajouter des pourboires (et supprimer ses propres saisies du jour).
 - `lecteur` : consulte seulement la caisse du jour (total + liste), mise à jour automatique toutes les 10 s.
 
-Les comptes sont dans `data/users.json` (mot de passe haché avec scrypt, jamais en clair). Un script crée un compte : `npm run user:add -- <nom> <mot_de_passe> <role>`.
+Les comptes sont dans `data/users.json` (mot de passe haché avec scrypt, jamais en clair). Le premier admin se crée par script : `npm run user:add -- <nom> <mot_de_passe> admin`. Un compte créé par l'admin porte `mustChangePassword: true` : tant que le mot de passe par défaut n'est pas remplacé, l'API refuse tout sauf le changement de mot de passe.
 
 ## Données
 - `data/users.json` : `[{ username, role, passwordHash }]`
-- `data/tips.json` : `{ date: "AAAA-MM-JJ", entries: [{ id, username, amount, time }] }`
+- `data/tips.json` : `{ date: "AAAA-MM-JJ", entries: [{ id, username, amount }] }` (uniquement l'utilisateur et le montant)
 - Réinitialisation quotidienne : à chaque lecture ou écriture, si `date` n'est plus celle du jour (fuseau Africa/Kinshasa), le fichier est remis à zéro. Aucun historique conservé.
 
 ## API (routes serveur Nuxt)
+- `POST /api/auth/password` : changer son mot de passe
+- `GET/POST /api/users`, `DELETE /api/users/:nom`, `POST /api/users/:nom/reset` (admin)
 - `POST /api/auth/login` / `POST /api/auth/logout` / `GET /api/auth/me` (cookie de session signé HMAC)
 - `GET /api/tips` : total + entrées du jour (tous les rôles connectés)
 - `POST /api/tips` : ajouter un montant (rôle `caissier` uniquement)

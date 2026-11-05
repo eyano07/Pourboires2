@@ -24,6 +24,7 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
   beforeAll(async () => {
     dir = mkdtempSync(join(tmpdir(), 'biso-e2e-'))
     const env = { ...process.env, DATA_DIR: dir, SESSION_SECRET: 'test-secret', PORT: String(PORT), HOST: '127.0.0.1' }
+    execFileSync('node', ['scripts/add-user.mjs', 'chef', 'adminpass1', 'admin'], { env })
     execFileSync('node', ['scripts/add-user.mjs', 'caisse', 'motdepasse1', 'caissier'], { env })
     execFileSync('node', ['scripts/add-user.mjs', 'patron', 'motdepasse2', 'lecteur'], { env })
     proc = spawn('node', [server], { env, stdio: 'ignore' })
@@ -74,12 +75,61 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     // Le fichier JSON contient bien nom + montant, et uniquement le jour courant
     const file = JSON.parse(readFileSync(join(dir, 'tips.json'), 'utf8'))
     expect(file.entries).toHaveLength(1)
+    expect(Object.keys(file.entries[0]).sort()).toEqual(['amount', 'id', 'username'])
     expect(file.entries[0]).toMatchObject({ username: 'caisse', amount: 50.5 })
+  })
+
+  it('administrateur : création d’un compte, première connexion, changement obligatoire du mot de passe', async () => {
+    const admin = await login('chef', 'adminpass1')
+    const post = (path: string, cookie: string, body: unknown) => call(path, cookie, { method: 'POST', body: JSON.stringify(body) })
+
+    // Seul l'administrateur gère les utilisateurs
+    const caisse = await login('caisse', 'motdepasse1')
+    expect((await call('/api/users', caisse.cookie)).status).toBe(403)
+    expect((await post('/api/users', caisse.cookie, { username: 'x1', role: 'lecteur', password: 'defaut1' })).status).toBe(403)
+    expect((await call('/api/users')).status).toBe(401)
+
+    // Création avec mot de passe par défaut
+    const created = await post('/api/users', admin.cookie, { username: 'marie', role: 'caissier', password: 'defaut1' })
+    expect(created.status).toBe(200)
+    expect((await post('/api/users', admin.cookie, { username: 'MARIE', role: 'caissier', password: 'defaut1' })).status).toBe(409)
+    expect((await post('/api/users', admin.cookie, { username: 'zoe', role: 'pirate', password: 'defaut1' })).status).toBe(400)
+    const list = await (await call('/api/users', admin.cookie)).json()
+    expect(JSON.stringify(list)).not.toContain('passwordHash')
+
+    // Première connexion : tout est bloqué sauf /me et le changement de mot de passe
+    const marie = await login('marie', 'defaut1')
+    expect(marie.r.status).toBe(200)
+    expect((await marie.r.json()).mustChangePassword).toBe(true)
+    expect((await call('/api/tips', marie.cookie)).status).toBe(403)
+    expect((await post('/api/tips', marie.cookie, { amount: 20 })).status).toBe(403)
+    expect((await (await call('/api/auth/me', marie.cookie)).json()).mustChangePassword).toBe(true)
+    expect((await post('/api/auth/password', marie.cookie, { current: 'faux', next: 'nouveau22' })).status).toBe(403)
+    expect((await post('/api/auth/password', marie.cookie, { current: 'defaut1', next: 'abc' })).status).toBe(400)
+    expect((await post('/api/auth/password', marie.cookie, { current: 'defaut1', next: 'nouveau22' })).status).toBe(200)
+
+    // Ensuite elle peut travailler, avec son nouveau mot de passe uniquement
+    expect((await post('/api/tips', marie.cookie, { amount: 20 })).status).toBe(200)
+    expect((await login('marie', 'defaut1')).r.status).toBe(401)
+    expect((await login('marie', 'nouveau22')).r.status).toBe(200)
+
+    // Réinitialisation : retour au mot de passe par défaut à changer
+    expect((await post('/api/users/marie/reset', admin.cookie, { password: 'retour33' })).status).toBe(200)
+    expect((await call('/api/tips', marie.cookie)).status).toBe(403)
+
+    // Suppression : le compte est bloqué immédiatement, même avec un cookie encore valide
+    expect((await call('/api/users/chef', admin.cookie, { method: 'DELETE' })).status).toBe(403)
+    expect((await call('/api/users/marie', admin.cookie, { method: 'DELETE' })).status).toBe(200)
+    expect((await call('/api/tips', marie.cookie)).status).toBe(401)
+
+    // Un administrateur ne peut pas ajouter de pourboires
+    expect((await post('/api/tips', admin.cookie, { amount: 5 })).status).toBe(403)
+    expect((await call('/api/tips', admin.cookie)).status).toBe(200)
   })
 
   it('déconnexion et /me', async () => {
     const { cookie } = await login('patron', 'motdepasse2')
-    expect(await (await call('/api/auth/me', cookie)).json()).toEqual({ username: 'patron', role: 'lecteur' })
+    expect(await (await call('/api/auth/me', cookie)).json()).toEqual({ username: 'patron', role: 'lecteur', mustChangePassword: false })
     const out = await call('/api/auth/logout', cookie, { method: 'POST' })
     expect(out.status).toBe(200)
   })

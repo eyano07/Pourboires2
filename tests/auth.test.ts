@@ -20,23 +20,21 @@ describe('mots de passe', () => {
 })
 
 describe('jeton de session', () => {
-  const user = { username: 'alice', role: 'caissier' as const }
   it('aller-retour valide', () => {
-    const s = readToken(createToken(user, 'k'), 'k')
+    const s = readToken(createToken('alice', 'k'), 'k')
     expect(s?.u).toBe('alice')
-    expect(s?.r).toBe('caissier')
   })
   it('refuse une mauvaise clé, un jeton modifié ou absent', () => {
-    const t = createToken(user, 'k')
+    const t = createToken('alice', 'k')
     expect(readToken(t, 'autre')).toBeNull()
     const [p, sig] = t.split('.')
-    const forged = Buffer.from(JSON.stringify({ u: 'alice', r: 'lecteur', exp: Date.now() + 1e6 })).toString('base64url')
+    const forged = Buffer.from(JSON.stringify({ u: 'admin', exp: Date.now() + 1e6 })).toString('base64url')
     expect(readToken(`${forged}.${sig}`, 'k')).toBeNull()
     expect(readToken(undefined, 'k')).toBeNull()
     expect(readToken(p, 'k')).toBeNull()
   })
   it('refuse un jeton expiré', () => {
-    const t = createToken(user, 'k', 1000)
+    const t = createToken('alice', 'k', 1000)
     expect(readToken(t, 'k', 1000 + SESSION_TTL_MS + 1)).toBeNull()
   })
 })

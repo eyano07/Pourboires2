@@ -2,11 +2,11 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
+/** Une saisie : uniquement l'utilisateur et le montant (l'id sert à la suppression). */
 export interface TipEntry {
   id: string
   username: string
   amount: number
-  time: string
 }
 export interface TipsFile {
   date: string
@@ -64,7 +64,12 @@ async function load(dir: string, now: Date): Promise<TipsFile> {
   let current: TipsFile | null = null
   try {
     const parsed = JSON.parse(await fs.readFile(file, 'utf8'))
-    if (parsed && typeof parsed.date === 'string' && Array.isArray(parsed.entries)) current = parsed
+    if (parsed && typeof parsed.date === 'string' && Array.isArray(parsed.entries)) {
+      current = {
+        date: parsed.date,
+        entries: parsed.entries.map((e: TipEntry) => ({ id: e.id, username: e.username, amount: e.amount })),
+      }
+    }
   } catch { /* fichier absent ou illisible */ }
   if (!current || current.date !== today) {
     current = { date: today, entries: [] }
@@ -84,7 +89,7 @@ export function addTip(
 ): Promise<TipEntry> {
   return serial(async () => {
     const data = await load(dir, now)
-    const entry: TipEntry = { id: randomUUID(), username, amount, time: now.toISOString() }
+    const entry: TipEntry = { id: randomUUID(), username, amount }
     data.entries.push(entry)
     await writeAtomic(join(dir, 'tips.json'), data)
     return entry

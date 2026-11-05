@@ -25,7 +25,7 @@
       <v-card-title>Saisies du jour ({{ data?.entries.length ?? 0 }})</v-card-title>
       <v-list v-if="data?.entries.length">
         <v-list-item v-for="e in [...data.entries].reverse()" :key="e.id" :title="money(e.amount)"
-                     :subtitle="`${e.username} · ${hour(e.time)}`">
+                     :subtitle="e.username">
           <template v-if="me?.role === 'caissier' && e.username === me.username" #append>
             <v-btn icon="mdi-delete" variant="text" aria-label="Supprimer" @click="remove(e.id)" />
           </template>
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-interface Entry { id: string, username: string, amount: number, time: string }
+interface Entry { id: string, username: string, amount: number }
 interface TipsData { date: string, total: number, entries: Entry[] }
 
 const me = useMe()
@@ -47,7 +47,6 @@ const formError = ref('')
 const saving = ref(false)
 
 const money = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(n)
-const hour = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Kinshasa' })
 
 async function add() {
   formError.value = ''
