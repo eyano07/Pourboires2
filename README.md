@@ -32,3 +32,21 @@ Ces deux fichiers sont ignorés par Git. `DATA_DIR` permet de changer le dossier
 npm run build && npm test
 ```
 Les tests de bout en bout démarrent le serveur construit ; sans build ils sont ignorés.
+
+## Déploiement sur un VPS (dossier unique `~/pourboires-biso`)
+
+Depuis votre ordinateur (Node 20+ requis aussi sur le VPS) :
+
+```bash
+deploy/deploy.sh utilisateur@adresse-du-vps 8087
+```
+
+ssh demande le mot de passe dans votre terminal (une seule fois). Le script construit l'application, envoie uniquement `.output`, `scripts/` et `control.sh` dans `~/pourboires-biso`, génère `.env` (secret de session + port) et démarre l'application. Sur le VPS :
+
+```bash
+cd ~/pourboires-biso
+./control.sh user-add chef <mot_de_passe> admin   # premier administrateur
+./control.sh status | stop | start | restart
+```
+
+Garanties : rien n'est écrit hors de `~/pourboires-biso`, aucun paquet ni service système ni pare-feu touché, arrêt uniquement via le fichier PID, `data/` et `.env` jamais écrasés, démarrage refusé si le port est déjà pris. Utilisez un port ≥ 1024 (8086, 8087…) ; ouvrez-le vous-même dans le pare-feu si nécessaire.
