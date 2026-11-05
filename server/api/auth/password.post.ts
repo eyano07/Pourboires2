@@ -1,12 +1,16 @@
 import { createError, defineEventHandler, readBody } from 'h3'
-import { requireUser } from '../../lib/session'
-import { changePassword, UserError } from '../../lib/users'
+import { requireUser, setSessionCookie } from '../../lib/session'
+import { changePassword, findUser, UserError } from '../../lib/users'
 
 export default defineEventHandler(async (event) => {
   const me = await requireUser(event, { allowTemporaryPassword: true })
   const body = await readBody<{ current?: unknown, next?: unknown }>(event)
   try {
-    return await changePassword(me.username, body?.current, body?.next)
+    const result = await changePassword(me.username, body?.current, body?.next)
+    // Les autres sessions (ex. cookie volé) deviennent invalides ; celle-ci reçoit un nouveau cookie.
+    const fresh = await findUser(me.username)
+    if (fresh) setSessionCookie(event, fresh)
+    return result
   } catch (e) {
     if (e instanceof UserError) throw createError({ statusCode: e.code === 'wrong_password' ? 403 : 400, statusMessage: e.message })
     throw e

@@ -106,7 +106,9 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     expect((await (await call('/api/auth/me', marie.cookie)).json()).mustChangePassword).toBe(true)
     expect((await post('/api/auth/password', marie.cookie, { current: 'faux', next: 'nouveau22' })).status).toBe(403)
     expect((await post('/api/auth/password', marie.cookie, { current: 'defaut1', next: 'abc' })).status).toBe(400)
-    expect((await post('/api/auth/password', marie.cookie, { current: 'defaut1', next: 'nouveau22' })).status).toBe(200)
+    const changed = await post('/api/auth/password', marie.cookie, { current: 'defaut1', next: 'nouveau22' })
+    expect(changed.status).toBe(200)
+    marie.cookie = changed.headers.get('set-cookie')?.split(';')[0] ?? ''
 
     // Ensuite elle peut travailler, avec son nouveau mot de passe uniquement
     expect((await post('/api/tips', marie.cookie, { amount: 20 })).status).toBe(200)
@@ -115,7 +117,8 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
 
     // Réinitialisation : retour au mot de passe par défaut à changer
     expect((await post('/api/users/marie/reset', admin.cookie, { password: 'retour33' })).status).toBe(200)
-    expect((await call('/api/tips', marie.cookie)).status).toBe(403)
+    expect((await call('/api/tips', marie.cookie)).status).toBe(401)
+    expect((await call('/api/tips', (await login('marie', 'retour33')).cookie)).status).toBe(403) // doit changer son mot de passe
 
     // Suppression : le compte est bloqué immédiatement, même avec un cookie encore valide
     expect((await call('/api/users/chef', admin.cookie, { method: 'DELETE' })).status).toBe(403)
@@ -125,6 +128,37 @@ describe.skipIf(!existsSync(server))('API (serveur construit)', () => {
     // Un administrateur ne peut pas ajouter de pourboires
     expect((await post('/api/tips', admin.cookie, { amount: 5 })).status).toBe(403)
     expect((await call('/api/tips', admin.cookie)).status).toBe(200)
+  })
+
+  it('un ancien cookie est invalide après changement ou réinitialisation du mot de passe', async () => {
+    const admin = await login('chef', 'adminpass1')
+    const post = (path: string, cookie: string, body: unknown) => call(path, cookie, { method: 'POST', body: JSON.stringify(body) })
+    await post('/api/users', admin.cookie, { username: 'paul', role: 'caissier', password: 'defaut1' })
+    const vole = await login('paul', 'defaut1')
+    const p = await login('paul', 'defaut1')
+    const changed = await post('/api/auth/password', p.cookie, { current: 'defaut1', next: 'nouveau22' })
+    expect(changed.status).toBe(200)
+    const fresh = changed.headers.get('set-cookie')?.split(';')[0] ?? ''
+    expect((await call('/api/tips', vole.cookie)).status).toBe(401)      // cookie volé : refusé
+    expect((await call('/api/tips', fresh)).status).toBe(200)            // l'utilisateur reste connecté
+    await post('/api/users/paul/reset', admin.cookie, { password: 'retour33' })
+    expect((await call('/api/tips', fresh)).status).toBe(401)
+  })
+
+  it('protections : taille, origine, en-têtes, limiteur', async () => {
+    const big = JSON.stringify({ username: 'x'.repeat(20000), password: 'y' })
+    expect((await call('/api/auth/login', '', { method: 'POST', body: big })).status).toBe(413)
+    const evil = await call('/api/auth/login', '', { method: 'POST', body: '{"username":"caisse","password":"motdepasse1"}', headers: { origin: 'http://127.0.0.1:9999' } })
+    expect(evil.status).toBe(403)
+    const same = await call('/api/auth/login', '', { method: 'POST', body: '{"username":"caisse","password":"motdepasse1"}', headers: { origin: base } })
+    expect(same.status).toBe(200)
+    const page = await fetch(`${base}/login`)
+    expect(page.headers.get('x-frame-options')).toBe('DENY')
+    expect(page.headers.get('x-content-type-options')).toBe('nosniff')
+    expect((await call('/api/auth/login', '', { method: 'POST', body: JSON.stringify({ username: 'u'.repeat(31), password: 'x' }) })).status).toBe(400)
+    let last = 0
+    for (let i = 0; i < 9; i++) last = (await call('/api/auth/login', '', { method: 'POST', body: '{"username":"cible","password":"faux"}' })).status
+    expect(last).toBe(429)
   })
 
   it('déconnexion et /me', async () => {

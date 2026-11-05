@@ -24,12 +24,21 @@ case "${1:-}" in
       echo "Choisissez un autre port : ./deploy/deploy.sh <utilisateur@serveur> <autre_port>" >&2
       exit 2
     fi
+    # Journal : rotation simple au-delà de 5 Mo (un seul ancien fichier conservé).
+    if [ -f "$DIR/app.log" ] && [ "$(wc -c < "$DIR/app.log")" -gt 5242880 ]; then mv -f "$DIR/app.log" "$DIR/app.log.1"; fi
+    chmod 700 "$DIR/data" 2>/dev/null || true
+    umask 077
     NODE_ENV=production HOST=0.0.0.0 PORT="$PORT" DATA_DIR="$DIR/data" \
       nohup node "$DIR/.output/server/index.mjs" >> "$DIR/app.log" 2>&1 &
     echo $! > "$PIDFILE"
-    sleep 1
-    if is_ours "$(current_pid)"; then echo "Démarrée sur le port $PORT (PID $(current_pid))."
-    else echo "ERREUR : l'application s'est arrêtée. Voir $DIR/app.log" >&2; tail -n 15 "$DIR/app.log" >&2; exit 1; fi
+    # Attendre que le serveur réponde réellement (15 s max).
+    for _ in $(seq 1 30); do
+      is_ours "$(current_pid)" || break
+      if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then echo "Démarrée sur le port $PORT (PID $(current_pid))."; exit 0; fi
+      sleep 0.5
+    done
+    echo "ERREUR : l'application ne répond pas. Voir $DIR/app.log" >&2; tail -n 15 "$DIR/app.log" >&2
+    "$0" stop >/dev/null 2>&1; exit 1
     ;;
   stop)
     pid="$(current_pid)"

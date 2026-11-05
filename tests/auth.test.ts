@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { authenticate, createToken, hashPassword, readToken, saveUsers, SESSION_TTL_MS, verifyPassword } from '../server/lib/auth'
+import { writeFileSync, statSync } from 'node:fs'
+import { authenticate, createToken, hashPassword, passwordVersion, readToken, readUsers, saveUsers, SESSION_TTL_MS, verifyPassword } from '../server/lib/auth'
 
 describe('mots de passe', () => {
   it('hache et vérifie', () => {
@@ -19,22 +20,24 @@ describe('mots de passe', () => {
   })
 })
 
+const alice = { username: 'alice', passwordHash: 'scrypt$aa$bb' }
+
 describe('jeton de session', () => {
   it('aller-retour valide', () => {
-    const s = readToken(createToken('alice', 'k'), 'k')
+    const s = readToken(createToken(alice, 'k'), 'k')
     expect(s?.u).toBe('alice')
   })
   it('refuse une mauvaise clé, un jeton modifié ou absent', () => {
-    const t = createToken('alice', 'k')
+    const t = createToken(alice, 'k')
     expect(readToken(t, 'autre')).toBeNull()
     const [p, sig] = t.split('.')
-    const forged = Buffer.from(JSON.stringify({ u: 'admin', exp: Date.now() + 1e6 })).toString('base64url')
+    const forged = Buffer.from(JSON.stringify({ u: 'admin', v: 'x', exp: Date.now() + 1e6 })).toString('base64url')
     expect(readToken(`${forged}.${sig}`, 'k')).toBeNull()
     expect(readToken(undefined, 'k')).toBeNull()
     expect(readToken(p, 'k')).toBeNull()
   })
   it('refuse un jeton expiré', () => {
-    const t = createToken('alice', 'k', 1000)
+    const t = createToken(alice, 'k', 1000)
     expect(readToken(t, 'k', 1000 + SESSION_TTL_MS + 1)).toBeNull()
   })
 })
@@ -46,5 +49,27 @@ describe('authenticate', () => {
     expect((await authenticate(dir, 'alice', 'pass123'))?.role).toBe('caissier')
     expect(await authenticate(dir, 'alice', 'faux')).toBeNull()
     expect(await authenticate(dir, 'zoe', 'pass123')).toBeNull()
+  })
+})
+
+describe('version du mot de passe dans le jeton', () => {
+  it('change quand le mot de passe change', () => {
+    const t = readToken(createToken(alice, 'k'), 'k')!
+    expect(t.v).toBe(passwordVersion(alice.passwordHash, 'k'))
+    expect(passwordVersion('scrypt$autre$hash', 'k')).not.toBe(t.v)
+  })
+})
+
+describe('users.json', () => {
+  it('fichier absent => aucun compte ; fichier abîmé => erreur (jamais écrasé)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biso-'))
+    expect(await readUsers(dir)).toEqual([])
+    writeFileSync(join(dir, 'users.json'), '[{"username":')
+    await expect(readUsers(dir)).rejects.toThrow()
+  })
+  it('est écrit avec des droits privés (600)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'biso-'))
+    await saveUsers(dir, [])
+    expect(statSync(join(dir, 'users.json')).mode & 0o777).toBe(0o600)
   })
 })

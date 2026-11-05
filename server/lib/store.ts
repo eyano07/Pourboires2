@@ -54,7 +54,7 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
 
 async function writeAtomic(file: string, data: unknown): Promise<void> {
   const tmp = `${file}.${process.pid}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+  await fs.writeFile(tmp, JSON.stringify(data, null, 2), { encoding: 'utf8', mode: 0o600 })
   await fs.rename(tmp, file)
 }
 
@@ -73,7 +73,7 @@ async function load(dir: string, now: Date): Promise<TipsFile> {
   } catch { /* fichier absent ou illisible */ }
   if (!current || current.date !== today) {
     current = { date: today, entries: [] }
-    await fs.mkdir(dir, { recursive: true })
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 })
     await writeAtomic(file, current)
   }
   return current

@@ -1,6 +1,7 @@
 {
   "name": "pourboires-chez-biso",
   "private": true,
+  "engines": { "node": ">=20" },
   "type": "module",
   "scripts": {
     "dev": "nuxt dev",

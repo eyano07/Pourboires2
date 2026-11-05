@@ -17,11 +17,22 @@ if (!/^[A-Za-z0-9_.-]{2,30}$/.test(username)) { console.error('Nom invalide (2 �
 const dir = process.env.DATA_DIR || join(process.cwd(), 'data')
 const file = join(dir, 'users.json')
 let users = []
-try { users = JSON.parse(await fs.readFile(file, 'utf8')) } catch {}
+let raw = null
+try { raw = await fs.readFile(file, 'utf8') } catch (e) { if (e.code !== 'ENOENT') throw e }
+if (raw !== null) {
+  try { users = JSON.parse(raw) } catch { users = null }
+  if (!Array.isArray(users)) {
+    // Ne jamais écraser un fichier de comptes abîmé : cela effacerait tous les comptes.
+    console.error(`ERREUR : ${file} est illisible. Rien n'a été modifié. Réparez-le ou restaurez une sauvegarde.`)
+    process.exit(1)
+  }
+}
 users = users.filter(u => u.username.toLowerCase() !== username.toLowerCase())
 const salt = randomBytes(16)
 const hash = scryptSync(password, salt, 64)
 users.push({ username, role, passwordHash: `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`, mustChangePassword: temp })
-await fs.mkdir(dir, { recursive: true })
-await fs.writeFile(file, JSON.stringify(users, null, 2), 'utf8')
+await fs.mkdir(dir, { recursive: true, mode: 0o700 })
+const tmp = `${file}.${process.pid}.tmp`
+await fs.writeFile(tmp, JSON.stringify(users, null, 2), { encoding: 'utf8', mode: 0o600 })
+await fs.rename(tmp, file)
 console.log(`Compte « ${username} » (${role}) enregistré dans ${file}${temp ? ' — mot de passe à changer à la première connexion' : ''}`)

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { addTip, readTips, removeTip, todayStr, totalOf, validateAmount } from '../server/lib/store'
@@ -76,6 +76,10 @@ describe('store', () => {
     }))
     const d = await readTips(dir, day1)
     expect(d.entries).toEqual([{ id: 'a', username: 'alice', amount: 5 }])
+  })
+  it('tips.json a des droits privés (600)', async () => {
+    await addTip('alice', 1, dir, day1)
+    expect(statSync(join(dir, 'tips.json')).mode & 0o777).toBe(0o600)
   })
   it('se remet d’un fichier corrompu', async () => {
     writeFileSync(join(dir, 'tips.json'), '{pas du json')

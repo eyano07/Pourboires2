@@ -11,7 +11,7 @@ export interface User {
   /** Vrai tant que l'utilisateur n'a pas remplacé son mot de passe par défaut. */
   mustChangePassword?: boolean
 }
-export interface Session { u: string, exp: number }
+export interface Session { u: string, v: string, exp: number }
 
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000
 export const MIN_PASSWORD = 6
@@ -34,9 +34,17 @@ export function verifyPassword(password: string, stored: string): boolean {
 const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64url')
 const sign = (data: string, secret: string) => createHmac('sha256', secret).update(data).digest('base64url')
 
-/** Le jeton ne contient que le nom : le rôle et l'état du compte sont relus dans users.json à chaque requête. */
-export function createToken(username: string, secret: string, now = Date.now()): string {
-  const payload = b64(JSON.stringify({ u: username, exp: now + SESSION_TTL_MS } satisfies Session))
+/** Empreinte courte du mot de passe haché : change dès que le mot de passe change. */
+export function passwordVersion(passwordHash: string, secret: string): string {
+  return createHmac('sha256', secret).update(`pwv:${passwordHash}`).digest('base64url').slice(0, 16)
+}
+
+/**
+ * Le jeton contient le nom et la version du mot de passe : le rôle et l'état du compte sont relus
+ * dans users.json à chaque requête, et un changement de mot de passe invalide les anciennes sessions.
+ */
+export function createToken(user: { username: string, passwordHash: string }, secret: string, now = Date.now()): string {
+  const payload = b64(JSON.stringify({ u: user.username, v: passwordVersion(user.passwordHash, secret), exp: now + SESSION_TTL_MS } satisfies Session))
   return `${payload}.${sign(payload, secret)}`
 }
 
@@ -49,23 +57,31 @@ export function readToken(token: string | undefined, secret: string, now = Date.
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null
   try {
     const s = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Session
-    if (typeof s.u !== 'string' || typeof s.exp !== 'number' || s.exp < now) return null
+    if (typeof s.u !== 'string' || typeof s.v !== 'string' || typeof s.exp !== 'number' || s.exp < now) return null
     return s
   } catch { return null }
 }
 
+/**
+ * Lit users.json. Fichier absent => aucun compte. Fichier illisible => erreur : on ne doit
+ * jamais réécrire (donc effacer) les comptes à partir d'un fichier corrompu.
+ */
 export async function readUsers(dir: string): Promise<User[]> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(join(dir, 'users.json'), 'utf8'))
-    return Array.isArray(parsed) ? parsed : []
-  } catch { return [] }
+  let raw: string
+  try { raw = await fs.readFile(join(dir, 'users.json'), 'utf8') } catch (e: any) {
+    if (e?.code === 'ENOENT') return []
+    throw e
+  }
+  const parsed = JSON.parse(raw)
+  if (!Array.isArray(parsed)) throw new Error('users.json invalide (tableau attendu)')
+  return parsed
 }
 
 export async function saveUsers(dir: string, users: User[]): Promise<void> {
-  await fs.mkdir(dir, { recursive: true })
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 })
   const file = join(dir, 'users.json')
   const tmp = `${file}.${process.pid}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(users, null, 2), 'utf8')
+  await fs.writeFile(tmp, JSON.stringify(users, null, 2), { encoding: 'utf8', mode: 0o600 })
   await fs.rename(tmp, file)
 }
 

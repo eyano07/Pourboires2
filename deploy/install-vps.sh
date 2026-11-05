@@ -22,11 +22,20 @@ case "$APP_DIR" in *..*) die "APP_DIR ne doit pas contenir « .. »";; esac
 command -v curl >/dev/null || die "curl est absent du serveur (installez-le : apt install curl)."
 command -v tar  >/dev/null || die "tar est absent du serveur."
 
+if [ "$(id -u)" -eq 0 ]; then
+  echo "ATTENTION : vous êtes root. L'application tournerait avec tous les droits sur le serveur."
+  echo "            Il est conseillé d'utiliser un compte ordinaire. Ctrl+C pour annuler (10 s)…"
+  sleep 10
+fi
+
 mkdir -p "$APP_DIR/data"
+chmod 700 "$APP_DIR/data"
 cd "$APP_DIR"
 
-# --- Port : refuser s'il est pris par un autre programme (hors notre propre appli) ---
-if ! { [ -x ./control.sh ] && ./control.sh status >/dev/null 2>&1; }; then
+# --- Port : refuser s'il est pris par un autre programme (hors notre propre appli sur ce même port) ---
+CURRENT_PORT=""
+[ -f .env ] && CURRENT_PORT="$(sed -n 's/^PORT=//p' .env | head -n1)"
+if ! { [ -x ./control.sh ] && ./control.sh status >/dev/null 2>&1 && [ "$CURRENT_PORT" = "$PORT" ]; }; then
   if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
     die "le port $PORT est déjà utilisé par un autre programme. Relancez avec un autre port : PORT=8088 bash install.sh"
   fi
@@ -35,7 +44,7 @@ fi
 # --- 0. Node.js : utilisé s'il est présent (>= 20), sinon installé DANS le dossier de l'application ---
 node_ok() { command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1 && [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 20 ]; }
 [ -x "$APP_DIR/.node/bin/node" ] && export PATH="$APP_DIR/.node/bin:$PATH"
-if node_ok && [ "${NODE_LOCAL:-0}" != "1" -o -x "$APP_DIR/.node/bin/node" ]; then
+if node_ok && { [ "${NODE_LOCAL:-0}" != "1" ] || [ -x "$APP_DIR/.node/bin/node" ]; }; then
   echo "0/4 Node.js $(node -v) présent."
 else
   echo "0/4 Node.js absent ou trop ancien : installation locale dans $APP_DIR/.node (aucun droit root requis)…"

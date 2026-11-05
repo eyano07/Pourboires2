@@ -53,3 +53,5 @@ Garanties : rien n'est écrit hors de `~/pourboires`, aucun paquet ni service sy
 
 ### Installation directement sur le VPS (sans poste local)
 Copiez `deploy/install-vps.sh` sur le VPS puis lancez `bash install-vps.sh` (variables : `PORT`, `APP_DIR`, `ADMIN_USER`, `ADMIN_PASSWORD`). Le dépôt est public : aucun jeton n'est nécessaire. Le script installe Node.js dans le dossier s'il manque, télécharge, construit, génère `data/` et `.env`, crée le premier admin et démarre. Relancez-le pour mettre à jour.
+
+Voir [AUDIT.md](AUDIT.md) pour l'audit de sécurité et les risques restants.
