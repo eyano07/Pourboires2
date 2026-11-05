@@ -7,3 +7,11 @@ dist
 # Données réelles : ne jamais publier les comptes ni les pourboires
 data/users.json
 data/tips.json
+
+# Android
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+*.keystore
+*.jks

@@ -1,0 +1,86 @@
+# Construit l'APK Android et le publie dans « Releases » du dépôt.
+# Lancement : automatique quand le dossier android/ change, ou à la main (Actions > APK Android > Run workflow).
+# Signature : secrets ANDROID_KEYSTORE_BASE64 et ANDROID_KEYSTORE_PASSWORD (sinon clé de test temporaire).
+name: APK Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "Adresse du serveur proposée au premier lancement (laisser vide = adresse par défaut)"
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Clé de signature
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "SIGNATURE=définitive" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Secrets de signature absents : APK signé avec une clé de test temporaire."
+            echo "SIGNATURE=temporaire (clé de test)" >> "$GITHUB_ENV"
+          fi
+
+      - name: Construire l'APK
+        working-directory: android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.${{ github.run_number }}
+          SERVER_URL: ${{ github.event.inputs.server_url }}
+        run: |
+          if [ -n "$SERVER_URL" ]; then gradle assembleRelease --no-daemon -PserverUrl="$SERVER_URL"
+          else gradle assembleRelease --no-daemon; fi
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/pourboires-biso.apk
+          ls -la ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pourboires-biso-apk
+          path: dist/pourboires-biso.apk
+
+      - name: Publier dans Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Appli Android ${{ github.run_number }}
+          make_latest: true
+          files: dist/pourboires-biso.apk
+          body: |
+            Appli Android « Pourboires chez Biso » — version 1.${{ github.run_number }}.
+            Signature : ${{ env.SIGNATURE }}.
+
+            Installation : téléchargez **pourboires-biso.apk** sur le téléphone, ouvrez-le et autorisez
+            l'installation depuis cette source si Android le demande.

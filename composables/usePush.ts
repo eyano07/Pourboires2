@@ -1,3 +1,8 @@
+/** Vrai dans l'appli Android (APK) : le site y est affiché dans une fenêtre interne. */
+export function isAndroidApp(): boolean {
+  return import.meta.client && typeof (window as any).BisoApp !== 'undefined'
+}
+
 /** Notifications Web Push (téléphone) : uniquement sur un site HTTPS ou en local. */
 export function pushSupported(): boolean {
   return import.meta.client && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window

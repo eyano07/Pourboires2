@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pourboires chez Biso</title>
+<style>
+  :root { color-scheme: light dark; --blue: #1867c0; --bg: #f3f5f7; --card: #fff; --text: #1f2937; --muted: #6b7280; --border: rgba(0,0,0,.15); }
+  @media (prefers-color-scheme: dark) { :root { --blue: #2f81f7; --bg: #0d1117; --card: #161b22; --text: #e6edf3; --muted: #9aa4b2; --border: rgba(255,255,255,.18); } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Roboto, system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  header { background: #1867c0; color: #fff; padding: 28px 22px 70px; }
+  header .logo { width: 56px; height: 56px; border-radius: 16px; background: rgba(255,255,255,.18); display: grid; place-items: center; font-size: 30px; font-weight: 700; margin-bottom: 14px; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 4px 0 0; opacity: .85; }
+  main { padding: 0 16px 24px; margin-top: -48px; }
+  .card { background: var(--card); border-radius: 22px; padding: 20px; border: 1px solid var(--border); }
+  h2 { margin: 0 0 6px; font-size: 1.15rem; }
+  .hint { color: var(--muted); font-size: .9rem; margin: 0 0 16px; line-height: 1.4; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
+  input { width: 100%; font-size: 1.05rem; padding: 14px; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text); }
+  input:focus { outline: none; border-color: var(--blue); }
+  button { width: 100%; font-size: 1rem; font-weight: 600; padding: 14px; border-radius: 12px; border: 0; margin-top: 12px; }
+  .primary { background: var(--blue); color: #fff; }
+  .secondary { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); }
+  .error { background: rgba(220,38,38,.12); color: #dc2626; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; font-size: .92rem; line-height: 1.4; }
+  @media (prefers-color-scheme: dark) { .error { color: #f87171; } }
+  .hidden { display: none; }
+  footer { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 18px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="logo">$</div>
+    <h1>Pourboires</h1>
+    <p>chez Biso</p>
+  </header>
+  <main>
+    <div class="card">
+      <div id="error" class="error hidden"></div>
+      <button id="retry" class="primary hidden" type="button">Réessayer</button>
+
+      <form id="form">
+        <h2 id="title">Adresse du serveur</h2>
+        <p class="hint">L'adresse fournie par votre administrateur (par exemple http://72.62.29.224:8087).</p>
+        <label for="url">Adresse</label>
+        <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+        <button class="primary" type="submit" id="submit">Se connecter</button>
+        <p id="invalid" class="error hidden" style="margin-top:12px">Adresse invalide.</p>
+      </form>
+    </div>
+    <footer id="version"></footer>
+  </main>
+<script>
+  var q = new URLSearchParams(location.search);
+  var app = window.BisoApp;
+  var input = document.getElementById('url');
+  input.value = q.get('url') || '';
+
+  var err = q.get('err');
+  if (err) {
+    var box = document.getElementById('error');
+    box.textContent = err;
+    box.classList.remove('hidden');
+    if (q.get('saved') === '1') {
+      document.getElementById('retry').classList.remove('hidden');
+      document.getElementById('title').textContent = 'Changer l’adresse';
+      document.getElementById('submit').className = 'secondary';
+      document.getElementById('submit').textContent = 'Utiliser cette adresse';
+    }
+  }
+
+  document.getElementById('retry').addEventListener('click', function () { app && app.retry(); });
+  document.getElementById('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var ok = app && app.save(input.value);
+    document.getElementById('invalid').classList.toggle('hidden', !!ok);
+  });
+  if (app && app.version) document.getElementById('version').textContent = 'Version ' + app.version();
+</script>
+</body>
+</html>

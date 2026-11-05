@@ -26,6 +26,7 @@
               <v-list-item :prepend-icon="isDark ? 'mdi-weather-sunny' : 'mdi-weather-night'"
                            :title="isDark ? 'Mode jour' : 'Mode nuit'" data-testid="theme-toggle" @click="toggleTheme" />
               <v-list-item v-if="!me.mustChangePassword" prepend-icon="mdi-key-outline" title="Changer mon mot de passe" to="/password" />
+              <v-list-item v-if="inApp" prepend-icon="mdi-server-network" title="Changer de serveur" @click="changeServer" />
               <v-list-item prepend-icon="mdi-logout" title="Déconnexion" base-color="error" @click="logout" />
             </v-list>
           </v-card>
@@ -55,6 +56,11 @@ const notices = useNotices()
 const { isDark, initFromCookie, followSystem, toggle: toggleTheme } = useThemeMode()
 initFromCookie() // choix mémorisé : appliqué dès le rendu du serveur (pas de flash)
 onMounted(followSystem) // sinon : réglage jour/nuit du téléphone
+
+// Dans l'appli Android : accès à la page de réglage de l'adresse du serveur.
+const inApp = ref(false)
+onMounted(() => { inApp.value = isAndroidApp() })
+const changeServer = () => (window as any).BisoApp?.changeServer()
 
 // Connexion en direct ouverte dès qu'un utilisateur est connecté (et a changé son mot de passe).
 onMounted(() => watch(me, (m) => { m && !m.mustChangePassword ? startLive() : stopLive() }, { immediate: true }))

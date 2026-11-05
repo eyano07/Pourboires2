@@ -135,6 +135,7 @@
       <div class="text-body-small flex-grow-1">
         <template v-if="pushStatus === 'on'">Alertes activées sur cet appareil.</template>
         <template v-else-if="pushStatus === 'denied'">Alertes bloquées dans les réglages du navigateur.</template>
+        <template v-else-if="pushStatus === 'unsupported' && inApp">Alertes affichées quand l'appli est ouverte.</template>
         <template v-else-if="pushStatus === 'unsupported'">Alertes affichées quand l'appli est ouverte (appli fermée : site HTTPS requis).</template>
         <template v-else>Recevoir les alertes même appli fermée.</template>
       </div>
@@ -250,6 +251,8 @@ async function closeTill() {
   } finally { closing.value = false }
 }
 
+const inApp = ref(false)
+onMounted(() => { inApp.value = isAndroidApp() })
 const pushStatus = ref<'unsupported' | 'denied' | 'on' | 'off'>('unsupported')
 const pushBusy = ref(false)
 const pushError = ref('')
