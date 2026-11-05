@@ -2,12 +2,13 @@
 # Installe / met à jour « Pourboires chez Biso » directement sur le VPS, dans UN SEUL dossier (~/pourboires).
 # Télécharge le code, installe Node.js localement s'il manque, construit, génère data/ et .env, démarre.
 # Rien n'est écrit en dehors du dossier de l'application ; aucun droit root nécessaire.
-# Variables facultatives : PORT (8087), APP_DIR, GITHUB_TOKEN, ADMIN_USER, ADMIN_PASSWORD
+# Dépôt public : aucun jeton nécessaire.
+# Variables facultatives : PORT (8087), APP_DIR, ADMIN_USER, ADMIN_PASSWORD
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-$HOME/pourboires}"
 PORT="${PORT:-8087}"
-REPO_SLUG="${REPO_SLUG:-eyano07/Pourboires_chez_biso}"
+REPO_SLUG="${REPO_SLUG:-eyano07/Pourboires2}"
 BRANCH="${BRANCH:-main}"
 NODE_MAJOR=22
 TARBALL_URL="${TARBALL_URL:-https://api.github.com/repos/$REPO_SLUG/tarball/$BRANCH}"
@@ -54,23 +55,10 @@ else
   echo "   Node.js $(node -v) installé dans $APP_DIR/.node"
 fi
 
-# --- Jeton GitHub (dépôt privé) : demandé sans affichage, jamais enregistré ---
-if [[ "$TARBALL_URL" == https://api.github.com/* ]] && [ -z "${GITHUB_TOKEN:-}" ]; then
-  [ -t 0 ] || die "dépôt privé : définissez GITHUB_TOKEN ou lancez le script dans un terminal interactif."
-  read -rsp "Jeton GitHub (accès en lecture au dépôt) : " GITHUB_TOKEN; echo
-fi
-
 # --- 1. Téléchargement du code ---
 echo "1/4 Téléchargement du code…"
 rm -rf "$APP_DIR/src" && mkdir "$APP_DIR/src"
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-  # Le jeton passe par stdin (« curl -K - ») : invisible dans « ps », jamais écrit sur le disque.
-  printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$GITHUB_TOKEN" \
-    | curl -fsSL -K - "$TARBALL_URL" -o code.tgz || die "téléchargement impossible (jeton invalide ou sans accès au dépôt ?)"
-else
-  curl -fsSL "$TARBALL_URL" -o code.tgz || die "téléchargement impossible."
-fi
-unset GITHUB_TOKEN
+curl -fsSL "$TARBALL_URL" -o code.tgz || die "téléchargement impossible (pas de connexion à GitHub ?)."
 tar xzf code.tgz -C src --strip-components=1 && rm -f code.tgz
 [ -f src/package.json ] || die "archive du dépôt inattendue."
 
